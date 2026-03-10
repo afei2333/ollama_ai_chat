@@ -36,6 +36,7 @@ class ToolExecutor:
         self.register("run_shell",  self._handle_run_shell)
         self.register("run_python", self._handle_run_python)
         self.register("write_file", self._handle_write_file)
+        self.register("read_file", self._handle_read_file)
         self.register("web_search", self._handle_web_search)
 
     def register(self, name: str, handler: ToolHandler) -> None:
@@ -149,3 +150,27 @@ class ToolExecutor:
             )
 
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _handle_read_file(args: Dict[str, Any]) -> str:
+        path: str = args.get("path", "").strip()  # ← filename 改为 path
+
+        if not path:
+            return "[read_file 错误]: 文件路径不能为空。"
+        if not os.path.isfile(path):
+            return f"[read_file 错误]: 文件不存在 — {path}"
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            abs_path = os.path.abspath(path)
+            lines    = content.count("\n") + 1 if content else 0
+            return (
+                f"✅ 文件读取成功\n"
+                f"路径: {abs_path}\n"
+                f"大小: {len(content)} 字符 / {lines} 行\n\n"
+                f"{content}"
+            )
+        except PermissionError:
+            return f"[read_file 错误]: 无读取权限 — {path}"
+        except Exception as exc:
+            return f"[read_file 错误]: {exc}"

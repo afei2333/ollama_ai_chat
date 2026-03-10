@@ -1071,6 +1071,9 @@ function renderMarkdown(text) {
     return div;
 }
 
+// 用 WeakMap 存储工具调用数据，避免将 JSON 塞进 onclick 字符串（脆弱且有 XSS 风险）
+const _toolCallStore = new WeakMap();
+
 function addMessage(role, text) {
     const chat = document.getElementById("chatBox");
     const msg = document.createElement("div");
@@ -1099,8 +1102,12 @@ function addMessage(role, text) {
     }
 
     wrap.append(tag, bubble);
-    msg.append(role === "user" ? wrap : avatar, role === "user" ? avatar : wrap);
-    if (role === "user") { msg.append(wrap, avatar); } else { msg.append(avatar, wrap); }
+    // 修复：原代码第一行 msg.append 和第二行 if 判断重复插入，导致子元素重复
+    if (role === "user") {
+        msg.append(wrap, avatar);
+    } else {
+        msg.append(avatar, wrap);
+    }
     chat.appendChild(msg);
     chat.scrollTop = chat.scrollHeight;
     return bubble;
@@ -1133,6 +1140,11 @@ function renderToolApproval(bubble, toolCalls) {
             title   = "📄 WRITE_REQUEST :: File";
             content = `filename: ${args.filename || ""}\n\n${args.content || ""}`;
             lang    = "plaintext";
+        
+        } else if (name === "read_file") {
+            title   = "📖 READ_REQUEST :: File";
+            content = `path: ${args.path || ""}`;
+            lang    = "plaintext";
         } else {
             title = "⚠️ UNKNOWN_REQUEST";
             content = JSON.stringify(tc, null, 2);
@@ -1140,17 +1152,23 @@ function renderToolApproval(bubble, toolCalls) {
             return;
         }
 
-        const tcData = encodeURIComponent(JSON.stringify(toolCalls)).replace(/'/g, "%27");
-
         const block = document.createElement("div");
         block.className = "tool-block";
         block.innerHTML = `
             <div class="tool-title">${title}</div>
             <pre><code class="lang-${lang}">${escapeHtml(content)}</code></pre>
             <div class="tool-actions">
-                <button class="btn primary small" onclick="approveTool(this,'${tcData}')">✓ AUTHORIZE</button>
-                <button class="btn danger small" onclick="denyTool(this)">✕ DENY</button>
+                <button class="btn primary small approve-btn">✓ AUTHORIZE</button>
+                <button class="btn danger small deny-btn">✕ DENY</button>
             </div>`;
+
+        // 用 WeakMap 将工具调用数据绑定到 DOM 按钮，安全且不污染 HTML 属性
+        const approveBtn = block.querySelector(".approve-btn");
+        const denyBtn = block.querySelector(".deny-btn");
+        _toolCallStore.set(approveBtn, toolCalls);
+        approveBtn.addEventListener("click", () => approveTool(approveBtn));
+        denyBtn.addEventListener("click", () => denyTool(denyBtn));
+
         bubble.appendChild(block);
     });
 }
@@ -1213,37 +1231,57 @@ async function handleStream(url, bodyObject, aiBubble) {
         const decoder = new TextDecoder("utf-8");
         let buffer = "", currentEvent = "message", currentData = "";
 
+        const processLine = (rawLine) => {
+            // 兼容 \r\n 和 \n 换行
+            const line = rawLine.replace(/\r$/, "");
+            if (!line) {
+                // 空行：触发事件派发
+                if (currentEvent === "token" && currentData) {
+                    try {
+                        const { text } = JSON.parse(currentData);
+                        fullText += text || "";
+                        appendToken(aiBubble, fullText);
+                    } catch { /* JSON 解析失败，跳过该 token */ }
+                } else if (currentEvent === "tool_call" && currentData) {
+                    try {
+                        const { tool_calls } = JSON.parse(currentData);
+                        renderToolApproval(aiBubble, tool_calls);
+                    } catch { /* 解析失败，跳过 */ }
+                } else if (currentEvent === "error" && currentData) {
+                    try {
+                        const { error } = JSON.parse(currentData);
+                        const mdDiv = aiBubble.querySelector(".md-content");
+                        if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[ERR] ${escapeHtml(error)}</p>`;
+                    } catch { /* 解析失败，跳过 */ }
+                }
+                currentEvent = "message";
+                currentData = "";
+                return;
+            }
+            if (line.startsWith("event:")) {
+                currentEvent = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+                const chunk = line.slice(5).trim();
+                currentData = currentData ? `${currentData}\n${chunk}` : chunk;
+            }
+        };
+
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done) {
+                // flush 剩余 buffer
+                if (buffer) {
+                    buffer.split("\n").forEach(processLine);
+                    processLine(""); // 触发最后一个事件（如无尾部空行）
+                }
+                break;
+            }
             buffer += decoder.decode(value, { stream: true });
 
             let idx;
             while ((idx = buffer.indexOf("\n")) >= 0) {
-                const line = buffer.slice(0, idx).trimEnd();
+                processLine(buffer.slice(0, idx));
                 buffer = buffer.slice(idx + 1);
-
-                if (!line) {
-                    if (currentEvent === "token" && currentData) {
-                        const { text } = JSON.parse(currentData);
-                        fullText += text || "";
-                        appendToken(aiBubble, fullText);
-                    } else if (currentEvent === "tool_call" && currentData) {
-                        const { tool_calls } = JSON.parse(currentData);
-                        renderToolApproval(aiBubble, tool_calls);
-                    } else if (currentEvent === "error" && currentData) {
-                        const { error } = JSON.parse(currentData);
-                        const mdDiv = aiBubble.querySelector(".md-content");
-                        if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[ERR] ${escapeHtml(error)}</p>`;
-                    }
-                    currentEvent = "message"; currentData = "";
-                    continue;
-                }
-                if (line.startsWith("event:")) currentEvent = line.slice(6).trim();
-                else if (line.startsWith("data:")) {
-                    const chunk = line.slice(5).trim();
-                    currentData = currentData ? `${currentData}\n${chunk}` : chunk;
-                }
             }
             document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
         }
@@ -1257,11 +1295,15 @@ async function handleStream(url, bodyObject, aiBubble) {
     }
 }
 
-async function approveTool(btnEl, tcData) {
+async function approveTool(btnEl) {
     if (state.isStreaming || !state.currentSessionId) return;
     const actionsDiv = btnEl.parentElement;
     actionsDiv.innerHTML = "<span style='color:var(--brand-2);font-family:monospace;font-size:11px'>✓ AUTHORIZED — EXECUTING...</span>";
-    const toolCalls = JSON.parse(decodeURIComponent(tcData));
+    const toolCalls = _toolCallStore.get(btnEl);
+    if (!toolCalls) {
+        actionsDiv.innerHTML = "<span style='color:var(--danger);font-family:monospace;font-size:11px'>[ERR] 工具数据丢失，请刷新重试</span>";
+        return;
+    }
     // 创建新的 AI 消息气泡，结果展示在新对话框中
     const resultBubble = addMessage("ai", "");
     await handleStream(`/sessions/${state.currentSessionId}/tool_stream`, { tool_calls: toolCalls }, resultBubble);

@@ -38,6 +38,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "根据需求使用工具完成任务：\n"
     "- run_shell：执行本地终端命令，适合系统操作、文件管理等；\n"
     "- web_search：通过网络搜索获取最新信息，适合时事、技术文档、价格查询等；\n"
+    "- read_file：读取本地文件内容；\n"
     "- write_file：将代码或文本内容写入到本地文件，当用户要求生成文件、保存代码时必须使用此工具。\n"
     "工具执行完毕后，基于输出结果向用户提供最终回答。\n"
     "重要：当用户要求将代码写入文件时，必须调用 write_file 工具，不能只在对话中展示代码。"
@@ -48,6 +49,8 @@ DEFAULT_SYSTEM_PROMPT = (
 # ---------------------------------------------------------------------------
 
 TOOL_DEFINITIONS: List[Dict[str, Any]] = [
+    # 工具定义示例
+    # 执行终端命令
     {
         "type": "function",
         "function": {
@@ -115,4 +118,24 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+    "type": "function",
+    "function": {
+        "name": "read_file",
+        "description": (
+            "读取本地文件的完整内容并返回。适用于查看代码、配置、日志等文本文件。"
+            "文件内容会直接返回，无需在参数中填写内容。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "要读取的文件路径，支持相对路径和绝对路径，例如 ./main.py",
+                },
+            },
+            "required": ["path"],
+        },
+    },
+},
 ]

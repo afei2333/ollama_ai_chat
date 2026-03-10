@@ -1,19 +1,21 @@
 """
 app.py — FastAPI 入口
-重构要点:
-  - 路由按资源分组，可读性更强
-  - _session_summary 提取为独立函数，统一响应结构
-  - _event_generator 增加类型标注，移除裸 except
-  - 依赖注入风格获取 session，减少重复的 404 判断
-  - lifespan 保持不变，职责清晰
+
+变更说明：
+  - 新增全局异常处理器（Exception → 500 JSON），统一错误响应结构
+  - _get_session_or_404 改为工厂函数，利用路径参数自动注入 session_id，
+    消除每个路由手动传 session_id 的样板代码
+  - /sessions/{session_id}/messages 使用 Depends 复用 session 获取逻辑
+  - SSE_HEADERS 补充 X-Accel-Buffering: no，避免 Nginx 代理时缓冲 SSE 流
+  - lifespan / 路由分组保持不变
 """
 
 import json
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -40,6 +42,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Local AI Assistant", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# ---------------------------------------------------------------------------
+# 全局异常处理
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    log.error("未捕获异常 %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "服务器内部错误，请稍后重试"},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -89,8 +104,11 @@ def _session_summary(session: SessionState) -> dict:
     }
 
 
-def _get_session_or_404(session_id: str) -> SessionState:
-    """公共依赖：获取 session，不存在则抛 404。"""
+def get_session_dep(session_id: str) -> SessionState:
+    """
+    路径参数工厂依赖：FastAPI 会自动将路由中的 {session_id} 注入此函数。
+    不存在时抛 404，避免在每个路由函数中重复判断。
+    """
     session = manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
@@ -112,11 +130,16 @@ def _sse_generator(generator, session_id: str):
         yield f"event: done\ndata: {done_payload}\n\n"
 
     except Exception as err:
+        log.error("SSE 流异常 session=%s: %s", session_id[:8], err, exc_info=True)
         error_payload = json.dumps({"error": str(err)}, ensure_ascii=False)
         yield f"event: error\ndata: {error_payload}\n\n"
 
 
-SSE_HEADERS = {"Cache-Control": "no-cache", "Connection": "keep-alive"}
+SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",   # 禁止 Nginx 缓冲 SSE
+}
 
 
 def _streaming_response(generator, session_id: str) -> StreamingResponse:
@@ -195,7 +218,7 @@ def delete_session(session_id: str):
 
 
 @app.get("/sessions/{session_id}/messages")
-def session_messages(session: SessionState = Depends(_get_session_or_404)):
+def session_messages(session: SessionState = Depends(get_session_dep)):
     return {"messages": session.messages}
 
 
@@ -206,7 +229,7 @@ def session_messages(session: SessionState = Depends(_get_session_or_404)):
 @app.post("/sessions/{session_id}/stream")
 def stream_chat(
     req: StreamChatRequest,
-    session: SessionState = Depends(_get_session_or_404),
+    session: SessionState = Depends(get_session_dep),
 ):
     gen = manager.stream_chat(
         session=session,
@@ -220,7 +243,7 @@ def stream_chat(
 @app.post("/sessions/{session_id}/tool_stream")
 def stream_tool_chat(
     req: ExecuteToolRequest,
-    session: SessionState = Depends(_get_session_or_404),
+    session: SessionState = Depends(get_session_dep),
 ):
     """用户确认工具执行后调用此接口，将工具输出喂回模型继续生成。"""
     gen = manager.execute_and_stream(session, req.tool_calls)

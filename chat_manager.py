@@ -2,6 +2,13 @@
 chat_manager.py — 对话管理核心
   ChatManager 是顶层业务协调器，整合 KnowledgeBase / SessionStore / ToolExecutor。
   自身不包含 I/O 或持久化细节，通过依赖注入便于单元测试。
+
+变更说明：
+  - 不再从 storage 导入私有函数 _now_iso，改用公开的 now_iso
+  - _stream_tokens_and_calls 修复 Ollama 流 chunk 解析：chunk 是对象而非 dict，
+    通过 getattr 兼容对象和 dict 两种形态
+  - _is_json_error 提取为模块级常量匹配，避免每次调用创建字符串
+  - execute_and_stream 改为先批量执行再一次性构建消息，减少 _build_model_messages 调用
 """
 
 from __future__ import annotations
@@ -11,7 +18,6 @@ from typing import Any, Dict, Generator, Iterator, List, Optional
 from uuid import uuid4
 
 import ollama
-from ollama._types import ResponseError
 
 from config import (
     DEFAULT_MAX_TURNS,
@@ -23,13 +29,22 @@ from config import (
     TOOL_DEFINITIONS,
 )
 from models import SessionState
-from storage import KnowledgeBase, SessionStore
+from storage import KnowledgeBase, SessionStore, now_iso
 from tool_parser import extract_tool_calls_from_text, normalize_tool_call
 from tools import ToolExecutor
 from logger import get_logger, get_llm_logger
 
 logger     = get_logger(__name__)
 llm_logger = get_llm_logger()
+
+_JSON_ERROR_MARKERS = ("unexpected end of JSON", "failed to parse JSON")
+
+
+def _get_attr(obj: Any, key: str, default: Any = None) -> Any:
+    """兼容 dict 和 object 两种结构的取值，用于处理 Ollama 返回的 chunk。"""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 
 
 class ChatManager:
@@ -63,8 +78,7 @@ class ChatManager:
         max_turns: int = DEFAULT_MAX_TURNS,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
     ) -> SessionState:
-        from storage import _now_iso  # 避免循环导入
-        now = _now_iso()
+        now = now_iso()
         session = SessionState(
             id=uuid4().hex,
             name=(name or f"新对话 {now[-8:]}").strip(),
@@ -96,7 +110,6 @@ class ChatManager:
         max_turns: Optional[int] = None,
         name: Optional[str] = None,
     ) -> Optional[SessionState]:
-        from storage import _now_iso
         session = self._store.get(session_id)
         if not session:
             return None
@@ -106,7 +119,7 @@ class ChatManager:
             session.max_turns = max(1, min(max_turns, 50))
         if name and name.strip():
             session.name = name.strip()
-        session.updated_at = _now_iso()
+        session.updated_at = now_iso()
         self._store.upsert(session)
         return session
 
@@ -148,14 +161,18 @@ class ChatManager:
         消费 Ollama 原始流：
           - 逐 token yield {"type": "text", "content": ...}
           - 流结束后若有工具调用，统一 yield {"type": "tool_call", ...}
+
+        注意：Ollama Python SDK 返回的 chunk 是对象（非 dict），
+        使用 _get_attr 兼容对象和 dict 两种形态。
         """
         full_content = ""
         tool_calls: List[Dict[str, Any]] = []
 
         for chunk in stream:
-            msg = chunk.get("message", {})
+            msg = _get_attr(chunk, "message", {})
 
-            raw_tcs = msg.get("tool_calls") or []
+            # 原生 tool_calls 字段（对象或 list）
+            raw_tcs = _get_attr(msg, "tool_calls") or []
             for raw_tc in raw_tcs:
                 normalized = normalize_tool_call(raw_tc)
                 if normalized:
@@ -163,7 +180,7 @@ class ChatManager:
             if raw_tcs:
                 continue
 
-            content: str = msg.get("content", "")
+            content: str = _get_attr(msg, "content", "") or ""
             if content:
                 full_content += content
                 yield {"type": "text", "content": content}
@@ -243,7 +260,7 @@ class ChatManager:
     @staticmethod
     def _is_json_error(exc: Exception) -> bool:
         msg = str(exc)
-        return "unexpected end of JSON" in msg or "failed to parse JSON" in msg
+        return any(marker in msg for marker in _JSON_ERROR_MARKERS)
 
     def _log_llm_response(
         self,
@@ -328,10 +345,12 @@ class ChatManager:
 
     def list_models(self) -> List[str]:
         try:
-            resp  = ollama.list()
+            resp = ollama.list()
+            # Ollama SDK 返回对象，兼容 dict 和 object
+            models_raw = _get_attr(resp, "models", []) or []
             names = [
-                item.get("name") or item.get("model")
-                for item in resp.get("models", [])
+                _get_attr(item, "name") or _get_attr(item, "model")
+                for item in models_raw
             ]
             unique = sorted({n for n in names if n})
             return unique or [self.default_model]
@@ -347,3 +366,4 @@ class ChatManager:
             logger.info("模型 %s 已卸载。", target)
         except Exception as exc:
             logger.warning("卸载模型 %s 失败: %s", target, exc)
+
