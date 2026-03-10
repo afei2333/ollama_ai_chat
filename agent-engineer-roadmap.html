@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>从零到 Agent 工程师 · 学习路线图</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    background: #0a0a0f;
+    color: #e8e8f0;
+    font-family: 'Courier New', Consolas, monospace;
+    padding: 40px 20px 60px;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,178,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,178,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { max-width: 860px; margin: 0 auto; position: relative; z-index: 1; }
+
+  /* ── Header ── */
+  .header { text-align: center; margin-bottom: 60px; }
+  .badge {
+    display: inline-block;
+    background: rgba(0,255,178,0.08);
+    border: 1px solid rgba(0,255,178,0.3);
+    border-radius: 4px; padding: 4px 14px;
+    font-size: 11px; color: #00FFB2;
+    letter-spacing: .2em; text-transform: uppercase; margin-bottom: 20px;
+  }
+  h1 {
+    font-size: clamp(30px, 6vw, 52px); font-weight: 900;
+    line-height: 1.1; letter-spacing: -0.02em;
+    font-family: Georgia, serif; color: #fff; margin-bottom: 16px;
+  }
+  .subtitle { color: #888; font-size: 15px; line-height: 1.7; }
+  .subtitle em { color: #00FFB2; font-style: normal; }
+
+  /* ── Timeline ── */
+  .timeline { position: relative; }
+  .timeline::before {
+    content: ''; position: absolute; left: 28px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(to bottom, #00FFB2, #A78BFA, #FF6B6B, transparent);
+    opacity: .3;
+  }
+  .phase-row { display: flex; gap: 24px; margin-bottom: 12px; position: relative; }
+
+  /* ── Node ── */
+  .node-col {
+    flex-shrink: 0; width: 58px;
+    display: flex; flex-direction: column; align-items: center; padding-top: 2px;
+  }
+  .node-btn {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,0.05); border: 2px solid var(--c);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; cursor: pointer;
+    transition: background .25s, box-shadow .25s;
+    position: relative; z-index: 1;
+    user-select: none; -webkit-user-select: none;
+  }
+  .phase-row.open .node-btn {
+    background: var(--c);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--c) 40%, transparent);
+  }
+
+  /* ── Card ── */
+  .card-col { flex: 1; padding-bottom: 16px; }
+  .card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; transition: background .25s, border-color .25s; overflow: hidden;
+  }
+  .phase-row.open .card {
+    background: color-mix(in srgb, var(--c) 8%, #0a0a0f);
+    border-color: color-mix(in srgb, var(--c) 38%, transparent);
+  }
+  .card-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 18px 22px 0; cursor: pointer;
+    user-select: none; -webkit-user-select: none;
+  }
+  .phase-meta { font-size: 10px; color: var(--c); letter-spacing: .2em; opacity: .8; margin-bottom: 4px; }
+  .phase-title { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -.01em; margin-bottom: 6px; }
+  .phase-desc { font-size: 13px; color: #666; line-height: 1.5; }
+  .duration-badge {
+    flex-shrink: 0; margin-left: 16px;
+    background: color-mix(in srgb, var(--c) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c) 25%, transparent);
+    border-radius: 6px; padding: 4px 10px;
+    font-size: 11px; color: var(--c); white-space: nowrap;
+  }
+  .card-hint {
+    padding: 10px 22px 16px; font-size: 11px; color: #444;
+    cursor: pointer; user-select: none; -webkit-user-select: none;
+  }
+  .card-body { display: none; padding: 0 22px 20px; }
+  .phase-row.open .card-body { display: block; }
+  .phase-row.open .card-hint { display: none; }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(to right, color-mix(in srgb, var(--c) 25%, transparent), transparent);
+    margin: 18px 0;
+  }
+
+  /* ── Steps ── */
+  .step { display: flex; gap: 14px; margin-bottom: 16px; align-items: flex-start; transition: opacity .2s; }
+  .step.done { opacity: .55; }
+  .step-check {
+    flex-shrink: 0; width: 24px; height: 24px; border-radius: 4px;
+    background: color-mix(in srgb, var(--c) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c) 31%, transparent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--c); font-weight: 700; margin-top: 1px;
+    cursor: pointer; user-select: none; -webkit-user-select: none;
+    transition: background .2s, border-color .2s; position: relative;
+  }
+  .step-check:hover { background: color-mix(in srgb, var(--c) 22%, transparent); }
+  .step.done .step-check { background: var(--c); border-color: var(--c); color: #0a0a0f; font-size: 13px; }
+  .step-name { font-weight: 600; font-size: 14px; color: #e8e8f0; margin-bottom: 3px; transition: color .2s; }
+  .step.done .step-name { text-decoration: line-through; color: #555; }
+  .step-detail { font-size: 12px; color: #666; margin-bottom: 4px; line-height: 1.5; }
+  .step-resource { font-size: 11px; color: var(--c); opacity: .7; }
+
+  /* ── Progress ── */
+  .progress-wrap { margin-top: 20px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+  .progress-track { flex: 1; height: 4px; background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--c); border-radius: 2px; transition: width .35s ease; width: 0%; }
+  .progress-label { font-size: 10px; color: var(--c); opacity: .7; white-space: nowrap; min-width: 36px; text-align: right; }
+
+  .milestone {
+    background: color-mix(in srgb, var(--c) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c) 19%, transparent);
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; color: var(--c); font-weight: 500;
+    transition: background .3s, border-color .3s;
+  }
+
+  /* ── Notes ── */
+  .note-section { margin-top: 14px; }
+
+  .note-toggle-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    font-size: 11px; color: #777;
+    cursor: pointer;
+    user-select: none; -webkit-user-select: none;
+    transition: background .2s, border-color .2s, color .2s;
+    font-family: inherit;
+  }
+  .note-toggle-btn:hover { background: rgba(255,255,255,0.07); color: #aaa; border-color: rgba(255,255,255,0.18); }
+  .note-toggle-btn.has-note { color: var(--c); border-color: color-mix(in srgb, var(--c) 35%, transparent); background: color-mix(in srgb, var(--c) 6%, transparent); }
+  .note-toggle-btn .arrow { transition: transform .2s; display: inline-block; font-style: normal; }
+  .note-toggle-btn.open .arrow { transform: rotate(90deg); }
+
+  .note-panel {
+    display: none;
+    margin-top: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .note-panel.open { display: block; }
+
+  /* Tab bar */
+  .note-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.02);
+  }
+  .note-tab {
+    padding: 7px 16px; font-size: 11px; color: #555;
+    cursor: pointer; user-select: none; -webkit-user-select: none;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color .15s, border-color .15s;
+    font-family: inherit;
+    letter-spacing: .05em;
+  }
+  .note-tab:hover { color: #888; }
+  .note-tab.active { color: var(--c); border-bottom-color: var(--c); }
+
+  .note-editor-wrap { position: relative; }
+  .note-textarea {
+    width: 100%; min-height: 160px;
+    background: rgba(0,0,0,0.25);
+    border: none; outline: none; resize: vertical;
+    color: #c8c8d8; font-family: 'Courier New', Consolas, monospace;
+    font-size: 13px; line-height: 1.7;
+    padding: 14px 16px;
+    display: block;
+  }
+  .note-textarea::placeholder { color: #333; }
+
+  /* Toolbar — hidden in preview mode */
+  .note-toolbar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    flex-wrap: wrap;
+  }
+  .toolbar-btn {
+    padding: 3px 8px; border-radius: 4px;
+    background: transparent; border: 1px solid rgba(255,255,255,0.08);
+    color: #666; font-size: 11px; cursor: pointer;
+    font-family: inherit; transition: background .15s, color .15s;
+    user-select: none;
+  }
+  .toolbar-btn:hover { background: rgba(255,255,255,0.07); color: #aaa; }
+  .toolbar-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.08); margin: 0 2px; }
+  .note-panel.tab-preview .note-toolbar { display: none; }
+
+
+  .note-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px;
+    background: rgba(255,255,255,0.02);
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .note-saved-hint { font-size: 10px; color: #333; transition: color .3s; }
+  .note-saved-hint.flash { color: #00FFB2; }
+  .note-clear-btn {
+    font-size: 10px; color: #333; cursor: pointer;
+    background: none; border: none; font-family: inherit;
+    padding: 2px 6px; border-radius: 3px;
+    transition: color .15s, background .15s;
+  }
+  .note-clear-btn:hover { color: #FF6B6B; background: rgba(255,107,107,0.08); }
+
+  /* MD Preview */
+  .note-preview {
+    display: none;
+    min-height: 80px;
+    padding: 14px 18px;
+    background: rgba(0,0,0,0.2);
+    font-size: 13.5px; line-height: 1.8;
+    color: #c8c8d8;
+  }
+  .note-preview.active { display: block; }
+  .note-preview h1,.note-preview h2,.note-preview h3 {
+    color: var(--c); font-family: Georgia, serif;
+    margin: 14px 0 6px; line-height: 1.3;
+  }
+  .note-preview h1 { font-size: 20px; }
+  .note-preview h2 { font-size: 17px; }
+  .note-preview h3 { font-size: 14px; }
+  .note-preview p { margin-bottom: 10px; }
+  .note-preview ul,.note-preview ol { padding-left: 22px; margin-bottom: 10px; }
+  .note-preview li { margin-bottom: 4px; }
+  .note-preview code {
+    background: rgba(255,255,255,0.07); border-radius: 3px;
+    padding: 1px 5px; font-size: 12px; font-family: 'Courier New', monospace;
+    color: #e8e8f0;
+  }
+  .note-preview pre {
+    background: rgba(0,0,0,0.35); border-radius: 6px;
+    padding: 12px 14px; overflow-x: auto; margin-bottom: 12px;
+    border: 1px solid rgba(255,255,255,0.07);
+  }
+  .note-preview pre code { background: none; padding: 0; font-size: 12.5px; }
+  .note-preview blockquote {
+    border-left: 3px solid var(--c); padding: 6px 14px;
+    color: #777; margin-bottom: 10px;
+    background: rgba(255,255,255,0.02); border-radius: 0 4px 4px 0;
+  }
+  .note-preview strong { color: #e8e8f0; font-weight: 700; }
+  .note-preview em { color: #aaa; font-style: italic; }
+  .note-preview a { color: var(--c); text-decoration: none; }
+  .note-preview a:hover { text-decoration: underline; }
+  .note-preview hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0; }
+  .note-preview .empty-hint { color: #333; font-style: italic; font-size: 12px; }
+
+
+  /* ── Step-level notes (compact) ── */
+  .step-note-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 6px;
+    padding: 3px 9px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 5px;
+    font-size: 10px; color: #555;
+    cursor: pointer;
+    user-select: none; -webkit-user-select: none;
+    transition: background .2s, border-color .2s, color .2s;
+    font-family: inherit;
+  }
+  .step-note-btn:hover { background: rgba(255,255,255,0.06); color: #888; border-color: rgba(255,255,255,0.15); }
+  .step-note-btn.has-note { color: var(--c); border-color: color-mix(in srgb, var(--c) 30%, transparent); background: color-mix(in srgb, var(--c) 5%, transparent); }
+  .step-note-btn .arrow { transition: transform .2s; display: inline-block; }
+  .step-note-btn.open .arrow { transform: rotate(90deg); }
+
+  .step-note-panel {
+    display: none;
+    margin-top: 8px;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .step-note-panel.open { display: block; }
+  /* ── Completed node ── */
+  .phase-row.completed .node-btn {
+    background: var(--c) !important; border-color: var(--c) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent), 0 0 24px color-mix(in srgb, var(--c) 55%, transparent) !important;
+    animation: pulse-ring 2.4s ease-in-out infinite;
+  }
+  .phase-row.completed .node-btn::after {
+    content: '✓'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 900; color: #0a0a0f;
+    background: var(--c); border-radius: 50%;
+    line-height: 44px; text-align: center;
+  }
+  .phase-row.completed .milestone {
+    background: color-mix(in srgb, var(--c) 14%, transparent);
+    border-color: color-mix(in srgb, var(--c) 45%, transparent);
+  }
+  @keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 4px color-mix(in srgb,var(--c) 18%,transparent), 0 0 24px color-mix(in srgb,var(--c) 55%,transparent); }
+    50%  { box-shadow: 0 0 0 8px color-mix(in srgb,var(--c) 8%,transparent),  0 0 36px color-mix(in srgb,var(--c) 35%,transparent); }
+    100% { box-shadow: 0 0 0 4px color-mix(in srgb,var(--c) 18%,transparent), 0 0 24px color-mix(in srgb,var(--c) 55%,transparent); }
+  }
+
+  /* ── Tips ── */
+  .tips-box {
+    margin-top: 48px; background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 28px;
+  }
+  .tips-label { font-size: 10px; color: #555; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 20px; }
+  .tips-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .tip {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 12px 14px; background: rgba(255,255,255,0.03);
+    border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);
+  }
+  .tip-icon { font-size: 20px; }
+  .tip-text { font-size: 13px; color: #999; line-height: 1.5; }
+
+  /* ── Footer ── */
+  .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #333; letter-spacing: .1em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="badge">LEARNING ROADMAP · 2025–2026</div>
+    <h1>从零到 Agent 工程师</h1>
+    <p class="subtitle">
+      一份为技术小白设计的系统学习路径<br>
+      预计总时长：<em>6–8 个月</em>（每天 1–2 小时）
+    </p>
+  </div>
+
+  <div class="timeline" id="timeline"></div>
+
+  <div class="tips-box">
+    <div class="tips-label">学习者守则</div>
+    <div class="tips-grid" id="tips-grid"></div>
+  </div>
+
+  <div class="footer">BUILT WITH CLAUDE · AGENT ENGINEERING ROADMAP · 2025</div>
+</div>
+
+<script>
+const phases = [
+  {
+    id: 1, subtitle: "Phase 01", title: "编程基础", duration: "4–6 周",
+    color: "#00FFB2", icon: "⌨️",
+    description: "从零开始，打好地基。不要跳过这一步。",
+    steps: [
+      { name: "Python 入门", detail: "变量、循环、函数、类、文件读写", resource: "📚 《Python编程：从入门到实践》或 CS50P（免费）" },
+      { name: "命令行 & Git", detail: "终端操作、版本控制、GitHub 基础", resource: "📚 Missing Semester（MIT 免费课程）" },
+      { name: "JSON & API 基础", detail: "理解 HTTP 请求、读懂 API 文档、用 requests 库调接口", resource: "📚 用 OpenWeather API 动手练习" },
+      { name: "虚拟环境 & 包管理", detail: "pip、venv、requirements.txt", resource: "📚 官方 Python 文档" },
+    ],
+    milestone: "✅ 能独立写一个调用第三方 API 的 Python 小脚本",
+  },
+  {
+    id: 2, subtitle: "Phase 02", title: "AI & LLM 核心概念", duration: "3–4 周",
+    color: "#FF6B6B", icon: "🧠",
+    description: "理解大模型是什么、怎么工作，建立正确的心智模型。",
+    steps: [
+      { name: "Prompt Engineering", detail: "System prompt、Few-shot、Chain-of-Thought、角色扮演", resource: "📚 Anthropic Prompt Engineering Guide（免费）" },
+      { name: "LLM API 调用", detail: "调用 OpenAI / Claude API，理解 tokens、temperature、streaming", resource: "📚 官方 API 文档 + Cookbook" },
+      { name: "RAG 基础概念", detail: "向量数据库、Embedding、语义检索是什么", resource: "📚 LangChain 官方文档入门篇" },
+      { name: "模型能力边界", detail: "幻觉、上下文窗口、推理局限性，建立实际预期", resource: "📚 Anthropic Model Card、动手测试对比" },
+    ],
+    milestone: "✅ 能搭建一个有系统提示词的 AI 对话应用",
+  },
+  {
+    id: 3, subtitle: "Phase 03", title: "Agent 框架与工具", duration: "4–6 周",
+    color: "#A78BFA", icon: "🤖",
+    description: "这是核心战场。学会让 AI 自主规划和使用工具。",
+    steps: [
+      { name: "Function Calling / Tool Use", detail: "定义工具、让模型决定何时调用、处理返回结果", resource: "📚 OpenAI Function Calling / Anthropic Tool Use 文档" },
+      { name: "ReAct 模式", detail: "Reasoning + Acting 循环，理解 Agent 的思考过程", resource: "📚 原始论文 + LangChain Agent 示例" },
+      { name: "LangChain / LlamaIndex", detail: "Chains、Memory、Retriever、Agent 封装", resource: "📚 官方 LangChain Academy（免费）" },
+      { name: "记忆系统设计", detail: "短期记忆、长期记忆、摘要记忆，理解状态管理", resource: "📚 动手实现不同记忆策略并对比效果" },
+    ],
+    milestone: "✅ 实现一个能搜索网页、读文件、写代码并自动执行的 Agent",
+  },
+  {
+    id: 4, subtitle: "Phase 04", title: "多 Agent 系统", duration: "3–4 周",
+    color: "#FCD34D", icon: "🕸️",
+    description: "单个 Agent 不够用时，学会让多个 Agent 协作。",
+    steps: [
+      { name: "Orchestrator-Worker 模式", detail: "主控 Agent 分配任务给子 Agent，理解层级结构", resource: "📚 AutoGen、CrewAI 框架文档" },
+      { name: "LangGraph", detail: "用状态图描述 Agent 工作流，处理循环和条件分支", resource: "📚 LangGraph 官方教程（强烈推荐）" },
+      { name: "Agent 间通信", detail: "消息格式设计、结构化输出、错误恢复机制", resource: "📚 动手构建：研究员 + 写作者 + 审核者三 Agent 系统" },
+      { name: "Human-in-the-Loop", detail: "何时需要人类干预、如何设计审批节点", resource: "📚 LangGraph Interrupt 机制" },
+    ],
+    milestone: "✅ 构建一个多 Agent 写作系统，能自动研究、撰写、修改报告",
+  },
+  {
+    id: 5, subtitle: "Phase 05", title: "工程化 & 部署", duration: "3–4 周",
+    color: "#34D399", icon: "🚀",
+    description: "让 Agent 从玩具变成产品，跑在真实环境中。",
+    steps: [
+      { name: "可观测性 & 追踪", detail: "LangSmith / Langfuse，调试 Agent 的每一步推理", resource: "📚 LangSmith 官方文档" },
+      { name: "API 服务化", detail: "FastAPI 封装 Agent，异步处理、流式输出", resource: "📚 FastAPI 官方教程" },
+      { name: "Docker & 云部署", detail: "容器化、Railway / Render 免费部署、环境变量管理", resource: "📚 Docker 入门 + Railway 文档" },
+      { name: "成本 & 安全控制", detail: "Token 用量监控、Prompt Injection 防御、速率限制", resource: "📚 OWASP LLM Top 10 文档" },
+    ],
+    milestone: "✅ 将你的 Agent 部署上线，拥有可访问的公网 URL",
+  },
+  {
+    id: 6, subtitle: "Phase 06", title: "实战项目 & 进阶", duration: "持续学习",
+    color: "#FB923C", icon: "⚡",
+    description: "做出真实作品，在实践中达到专家水平。",
+    steps: [
+      { name: "标杆项目积累", detail: "个人 AI 助手、代码审查 Agent、自动化数据分析管道", resource: "📚 GitHub 开源 + 个人博客记录过程" },
+      { name: "MCP 协议", detail: "Model Context Protocol，连接外部工具的新标准", resource: "📚 Anthropic MCP 官方文档" },
+      { name: "评测 & 迭代", detail: "设计评测集、A/B 测试提示词、量化 Agent 性能", resource: "📚 RAGAS、DeepEval 评测框架" },
+      { name: "社区 & 前沿跟进", detail: "跟读论文、参与开源、关注 AI 工程社区动态", resource: "📚 Twitter/X、Hugging Face Paper、中文 AI 社区" },
+    ],
+    milestone: "✅ GitHub 有 3+ 个完整 Agent 项目，能清晰讲解技术决策",
+  },
+];
+
+const tips = [
+  { icon: "🔥", text: "每天至少 1 小时动手写代码，不能只看不练" },
+  { icon: "📝", text: "遇到问题先问 Claude / GPT，但要理解答案再用" },
+  { icon: "🗂️", text: "每个阶段做一个 Mini Project，放到 GitHub" },
+  { icon: "🤝", text: "加入中文 AI 工程师社区，跟人交流会加速 10 倍" },
+];
+
+// ── localStorage helpers ──
+function lsGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
+function lsSet(key, val) { try { localStorage.setItem(key, val); } catch {} }
+
+// ── Lightweight Markdown renderer ──
+function renderMD(md) {
+  if (!md || !md.trim()) return '<span class="empty-hint">还没有笔记，切换到「编辑」开始记录吧 ✍️</span>';
+
+  // Escape HTML first
+  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  let html = '';
+  const lines = md.split('\n');
+  let i = 0;
+  let inUl = false, inOl = false, inPre = false, preBuf = '';
+
+  function closeList() {
+    if (inUl) { html += '</ul>'; inUl = false; }
+    if (inOl) { html += '</ol>'; inOl = false; }
+  }
+
+  function inlineFormat(s) {
+    // code spans first (no further processing inside)
+    s = s.replace(/`([^`]+)`/g, (_, c) => '<code>' + esc(c) + '</code>');
+    // bold+italic
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    // bold
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    // italic
+    s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
+    // links
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    // strikethrough
+    s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    return s;
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // fenced code block
+    if (!inPre && line.match(/^```/)) {
+      closeList();
+      inPre = true; preBuf = '';
+      i++; continue;
+    }
+    if (inPre) {
+      if (line.match(/^```/)) {
+        html += '<pre><code>' + esc(preBuf.replace(/\n$/, '')) + '</code></pre>';
+        inPre = false; preBuf = '';
+      } else { preBuf += line + '\n'; }
+      i++; continue;
+    }
+
+    // headings
+    const h3 = line.match(/^### (.+)/);
+    const h2 = line.match(/^## (.+)/);
+    const h1m = line.match(/^# (.+)/);
+    if (h1m) { closeList(); html += '<h1>' + inlineFormat(esc(h1m[1])) + '</h1>'; i++; continue; }
+    if (h2)  { closeList(); html += '<h2>' + inlineFormat(esc(h2[1]))  + '</h2>'; i++; continue; }
+    if (h3)  { closeList(); html += '<h3>' + inlineFormat(esc(h3[1]))  + '</h3>'; i++; continue; }
+
+    // hr
+    if (line.match(/^(-{3,}|\*{3,}|_{3,})$/)) { closeList(); html += '<hr>'; i++; continue; }
+
+    // blockquote
+    if (line.match(/^> /)) {
+      closeList();
+      const qtext = line.replace(/^> /, '');
+      html += '<blockquote>' + inlineFormat(esc(qtext)) + '</blockquote>';
+      i++; continue;
+    }
+
+    // unordered list
+    const ulM = line.match(/^[\-\*] (.+)/);
+    if (ulM) {
+      if (inOl) { html += '</ol>'; inOl = false; }
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += '<li>' + inlineFormat(esc(ulM[1])) + '</li>';
+      i++; continue;
+    }
+
+    // ordered list
+    const olM = line.match(/^\d+\. (.+)/);
+    if (olM) {
+      if (inUl) { html += '</ul>'; inUl = false; }
+      if (!inOl) { html += '<ol>'; inOl = true; }
+      html += '<li>' + inlineFormat(esc(olM[1])) + '</li>';
+      i++; continue;
+    }
+
+    closeList();
+
+    // blank line → paragraph break
+    if (!line.trim()) { html += '<p></p>'; i++; continue; }
+
+    html += '<p>' + inlineFormat(esc(line)) + '</p>';
+    i++;
+  }
+
+  closeList();
+  if (inPre) html += '<pre><code>' + esc(preBuf) + '</code></pre>';
+  return html;
+}
+
+// ── Render timeline ──
+const tl = document.getElementById('timeline');
+
+function lsGetStep(phaseId, stepIdx) { return lsGet('phase-' + phaseId + '-step-' + stepIdx) === '1'; }
+function lsSetStep(phaseId, stepIdx, val) { lsSet('phase-' + phaseId + '-step-' + stepIdx, val ? '1' : '0'); }
+function lsGetNote(phaseId) { return lsGet('note-' + phaseId) || ''; }
+function lsSetNote(phaseId, val) { lsSet('note-' + phaseId, val); }
+
+phases.forEach(function(p) {
+  const row = document.createElement('div');
+  row.className = 'phase-row';
+  row.style.setProperty('--c', p.color);
+
+  const stepsHTML = p.steps.map(function(s, i) {
+    var sid = 'p' + p.id + 's' + i;
+    return '<div class="step" data-phase="' + p.id + '" data-step="' + i + '">' +
+      '<div class="step-check" title="点击标记完成" data-phase="' + p.id + '" data-step="' + i + '">' + (i+1) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="step-name">' + s.name + '</div>' +
+        '<div class="step-detail">' + s.detail + '</div>' +
+        '<div class="step-resource">' + s.resource + '</div>' +
+        '<button class="step-note-btn" data-sid="' + sid + '">' +
+          '<span class="arrow">▶</span> 📝 笔记' +
+        '</button>' +
+        '<div class="step-note-panel" data-sid="' + sid + '">' +
+          '<div class="note-tabs">' +
+            '<div class="note-tab active" data-tab="preview">预览</div>' +
+            '<div class="note-tab" data-tab="edit">编辑</div>' +
+          '</div>' +
+          '<div class="note-toolbar">' +
+            '<button class="toolbar-btn" data-insert="**粗体**">B</button>' +
+            '<button class="toolbar-btn" data-insert="*斜体*"><em>I</em></button>' +
+            '<button class="toolbar-btn" data-insert="`代码`">Code</button>' +
+            '<div class="toolbar-sep"></div>' +
+            '<button class="toolbar-btn" data-insert="# ">H1</button>' +
+            '<button class="toolbar-btn" data-insert="## ">H2</button>' +
+            '<button class="toolbar-btn" data-insert="### ">H3</button>' +
+            '<div class="toolbar-sep"></div>' +
+            '<button class="toolbar-btn" data-insert="- ">列表</button>' +
+            '<button class="toolbar-btn" data-insert="> ">引用</button>' +
+            '<button class="toolbar-btn" data-insert="```\n\n```">代码块</button>' +
+          '</div>' +
+          '<div class="note-editor-wrap">' +
+            '<textarea class="note-textarea" placeholder="记录这个知识点的笔记、理解、踩坑..."></textarea>' +
+          '</div>' +
+          '<div class="note-preview"></div>' +
+          '<div class="note-footer">' +
+            '<span class="note-saved-hint">笔记自动保存到本地</span>' +
+            '<button class="note-clear-btn">清空</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  row.innerHTML =
+    '<div class="node-col">' +
+      '<div class="node-btn" title="展开/收起">' + p.icon + '</div>' +
+    '</div>' +
+    '<div class="card-col">' +
+      '<div class="card">' +
+        '<div class="card-header">' +
+          '<div>' +
+            '<div class="phase-meta">' + p.subtitle + '</div>' +
+            '<div class="phase-title">' + p.title + '</div>' +
+            '<div class="phase-desc">' + p.description + '</div>' +
+          '</div>' +
+          '<div class="duration-badge">' + p.duration + '</div>' +
+        '</div>' +
+        '<div class="card-hint">点击展开 ' + p.steps.length + ' 个学习步骤 →</div>' +
+        '<div class="card-body">' +
+          '<div class="divider"></div>' +
+          stepsHTML +
+          '<div class="progress-wrap">' +
+            '<div class="progress-track"><div class="progress-fill"></div></div>' +
+            '<div class="progress-label">0 / ' + p.steps.length + '</div>' +
+          '</div>' +
+          '<div class="milestone">' + p.milestone + '</div>' +
+
+          // Notes section
+          '<div class="note-section">' +
+            '<button class="note-toggle-btn" title="记录笔记/复盘">' +
+              '<span class="arrow">▶</span> 📝 学习笔记' +
+            '</button>' +
+            '<div class="note-panel">' +
+              '<div class="note-tabs">' +
+                '<div class="note-tab active" data-tab="edit">编辑</div>' +
+                '<div class="note-tab" data-tab="preview">预览</div>' +
+              '</div>' +
+              '<div class="note-toolbar">' +
+                '<button class="toolbar-btn" data-insert="**粗体**">B</button>' +
+                '<button class="toolbar-btn" data-insert="*斜体*"><em>I</em></button>' +
+                '<button class="toolbar-btn" data-insert="`代码`">Code</button>' +
+                '<div class="toolbar-sep"></div>' +
+                '<button class="toolbar-btn" data-insert="# ">H1</button>' +
+                '<button class="toolbar-btn" data-insert="## ">H2</button>' +
+                '<button class="toolbar-btn" data-insert="### ">H3</button>' +
+                '<div class="toolbar-sep"></div>' +
+                '<button class="toolbar-btn" data-insert="- ">列表</button>' +
+                '<button class="toolbar-btn" data-insert="> ">引用</button>' +
+                '<button class="toolbar-btn" data-insert="```\n\n```">代码块</button>' +
+              '</div>' +
+              '<div class="note-editor-wrap">' +
+                '<textarea class="note-textarea" placeholder="用 Markdown 记录你的学习笔记、踩坑记录、复盘心得...&#10;&#10;支持 **粗体**、*斜体*、`代码`、# 标题、- 列表、> 引用、代码块等语法"></textarea>' +
+              '</div>' +
+              '<div class="note-preview"></div>' +
+              '<div class="note-footer">' +
+                '<span class="note-saved-hint">笔记自动保存到本地</span>' +
+                '<button class="note-clear-btn">清空笔记</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // ── Completion logic ──
+  function refreshCompletion() {
+    const stepEls = row.querySelectorAll('.step');
+    let doneCount = 0;
+    stepEls.forEach(function(stepEl, i) {
+      const done = lsGetStep(p.id, i);
+      const check = stepEl.querySelector('.step-check');
+      if (done) { stepEl.classList.add('done'); check.textContent = '✓'; doneCount++; }
+      else { stepEl.classList.remove('done'); check.textContent = i + 1; }
+    });
+    const pct = Math.round(doneCount / p.steps.length * 100);
+    const fillEl = row.querySelector('.progress-fill');
+    const labelEl = row.querySelector('.progress-label');
+    if (fillEl) fillEl.style.width = pct + '%';
+    if (labelEl) labelEl.textContent = doneCount + ' / ' + p.steps.length;
+    if (doneCount === p.steps.length) row.classList.add('completed');
+    else row.classList.remove('completed');
+  }
+
+  row.querySelectorAll('.step-check').forEach(function(checkEl) {
+    checkEl.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const phaseId = parseInt(checkEl.dataset.phase);
+      const stepIdx = parseInt(checkEl.dataset.step);
+      lsSetStep(phaseId, stepIdx, !lsGetStep(phaseId, stepIdx));
+      refreshCompletion();
+    });
+  });
+
+  // ── Step-level note logic ──
+  function lsGetStepNote(sid) { return lsGet('snote-' + sid) || ''; }
+  function lsSetStepNote(sid, val) { lsSet('snote-' + sid, val); }
+
+  row.querySelectorAll('.step-note-btn').forEach(function(btn) {
+    var sid = btn.dataset.sid;
+    var panel = row.querySelector('.step-note-panel[data-sid="' + sid + '"]');
+    var ta = panel.querySelector('.note-textarea');
+    var pv = panel.querySelector('.note-preview');
+    var savedH = panel.querySelector('.note-saved-hint');
+    var tabs2 = panel.querySelectorAll('.note-tab');
+
+    // Load saved
+    var saved = lsGetStepNote(sid);
+    ta.value = saved;
+    if (saved) btn.classList.add('has-note');
+
+    function showTab2(which) {
+      tabs2.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === which); });
+      if (which === 'edit') {
+        ta.style.display = 'block';
+        pv.classList.remove('active');
+        panel.classList.remove('tab-preview');
+        panel.classList.add('tab-edit');
+      } else {
+        ta.style.display = 'none';
+        pv.innerHTML = renderMD(ta.value);
+        pv.classList.add('active');
+        panel.classList.remove('tab-edit');
+        panel.classList.add('tab-preview');
+      }
+    }
+
+    // Toggle panel
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var isOpen = panel.classList.toggle('open');
+      btn.classList.toggle('open', isOpen);
+      if (isOpen) { showTab2('preview'); }
+    });
+
+    // Tab switching
+    tabs2.forEach(function(tab) {
+      tab.addEventListener('click', function(e) {
+        e.stopPropagation();
+        showTab2(tab.dataset.tab);
+        if (tab.dataset.tab === 'edit') { setTimeout(function() { ta.focus(); }, 30); }
+      });
+    });
+
+    // Toolbar
+    panel.querySelectorAll('.toolbar-btn').forEach(function(tb) {
+      tb.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var ins = tb.dataset.insert; if (!ins) return;
+        var st = ta.selectionStart, en = ta.selectionEnd;
+        var sel = ta.value.substring(st, en);
+        var bef = ta.value.substring(0, st), aft = ta.value.substring(en);
+        var newText, cur;
+        if (sel && ins === '**粗体**') { newText = bef+'**'+sel+'**'+aft; cur = st+sel.length+4; }
+        else if (sel && ins === '*斜体*') { newText = bef+'*'+sel+'*'+aft; cur = st+sel.length+2; }
+        else if (sel && ins === '`代码`') { newText = bef+'`'+sel+'`'+aft; cur = st+sel.length+2; }
+        else { newText = bef+ins+aft; cur = st+ins.length; }
+        ta.value = newText; ta.focus(); ta.setSelectionRange(cur, cur);
+        saveStepNote();
+      });
+    });
+
+    // Tab key
+    ta.addEventListener('keydown', function(e) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        var s = ta.selectionStart, en = ta.selectionEnd;
+        ta.value = ta.value.substring(0,s) + '  ' + ta.value.substring(en);
+        ta.setSelectionRange(s+2, s+2);
+      }
+    });
+
+    var stepSaveTimer;
+    function saveStepNote() {
+      clearTimeout(stepSaveTimer);
+      stepSaveTimer = setTimeout(function() {
+        lsSetStepNote(sid, ta.value);
+        btn.classList.toggle('has-note', ta.value.trim().length > 0);
+        savedH.textContent = '已保存 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+        savedH.classList.add('flash');
+        setTimeout(function() { savedH.classList.remove('flash'); }, 1200);
+      }, 600);
+    }
+    ta.addEventListener('input', saveStepNote);
+
+    // Clear
+    var clearB = panel.querySelector('.note-clear-btn');
+    clearB.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (ta.value && !confirm('确认清空这条笔记？')) return;
+      ta.value = ''; lsSetStepNote(sid, '');
+      btn.classList.remove('has-note');
+      savedH.textContent = '笔记自动保存到本地';
+      showTab2('preview');
+    });
+  });
+
+  // ── Phase-level Notes logic ──
+  const noteToggleBtn = row.querySelector('.note-section > .note-toggle-btn');
+  const notePanel = row.querySelector('.note-section > .note-panel');
+  const textarea = notePanel.querySelector('.note-textarea');
+  const preview = notePanel.querySelector('.note-preview');
+  const savedHint = notePanel.querySelector('.note-saved-hint');
+  const clearBtn = notePanel.querySelector('.note-clear-btn');
+  const tabs = notePanel.querySelectorAll('.note-tab');
+
+  // Load saved note
+  const savedNote = lsGetNote(p.id);
+  textarea.value = savedNote;
+  if (savedNote) noteToggleBtn.classList.add('has-note');
+
+  // Toggle note panel open/close
+  noteToggleBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const isOpen = notePanel.classList.toggle('open');
+    noteToggleBtn.classList.toggle('open', isOpen);
+    if (isOpen) {
+      // Default to preview tab
+      showTab('preview');
+    }
+  });
+
+  // Tab switching
+  function showTab(which) {
+    tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === which); });
+    if (which === 'edit') {
+      textarea.style.display = 'block';
+      preview.classList.remove('active');
+      notePanel.classList.remove('tab-preview');
+      notePanel.classList.add('tab-edit');
+    } else {
+      textarea.style.display = 'none';
+      preview.innerHTML = renderMD(textarea.value);
+      preview.classList.add('active');
+      notePanel.classList.remove('tab-edit');
+      notePanel.classList.add('tab-preview');
+    }
+  }
+
+  tabs.forEach(function(tab) {
+    tab.addEventListener('click', function(e) {
+      e.stopPropagation();
+      showTab(tab.dataset.tab);
+    });
+  });
+
+  // Toolbar insert
+  notePanel.querySelectorAll('.toolbar-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const insert = btn.dataset.insert;
+      if (!insert) return;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const before = textarea.value.substring(0, start);
+      const selected = textarea.value.substring(start, end);
+      const after = textarea.value.substring(end);
+      // If there's a selection and insert wraps (has content), wrap it; else just insert
+      let newText, cursorPos;
+      if (selected && insert.includes('**')) {
+        newText = before + '**' + selected + '**' + after;
+        cursorPos = start + selected.length + 4;
+      } else if (selected && insert === '*斜体*') {
+        newText = before + '*' + selected + '*' + after;
+        cursorPos = start + selected.length + 2;
+      } else if (selected && insert === '`代码`') {
+        newText = before + '`' + selected + '`' + after;
+        cursorPos = start + selected.length + 2;
+      } else {
+        newText = before + insert + after;
+        cursorPos = start + insert.length;
+      }
+      textarea.value = newText;
+      textarea.focus();
+      textarea.setSelectionRange(cursorPos, cursorPos);
+      saveNote();
+    });
+  });
+
+  // Auto-save on input
+  let saveTimer;
+  function saveNote() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function() {
+      lsSetNote(p.id, textarea.value);
+      noteToggleBtn.classList.toggle('has-note', textarea.value.trim().length > 0);
+      savedHint.textContent = '已保存 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+      savedHint.classList.add('flash');
+      setTimeout(function() { savedHint.classList.remove('flash'); }, 1200);
+    }, 600);
+  }
+
+  textarea.addEventListener('input', saveNote);
+
+  // Tab key inserts spaces in textarea
+  textarea.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
+      textarea.setSelectionRange(start + 2, start + 2);
+    }
+  });
+
+  // Clear note
+  clearBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (textarea.value && !confirm('确认清空这个阶段的全部笔记？')) return;
+    textarea.value = '';
+    lsSetNote(p.id, '');
+    noteToggleBtn.classList.remove('has-note');
+    savedHint.textContent = '笔记自动保存到本地';
+    showTab('preview');
+  });
+
+  // ── Toggle card open/close (drag + selection safe) ──
+  function makeToggle(el) {
+    let downX, downY;
+    el.addEventListener('mousedown', function(e) { downX = e.clientX; downY = e.clientY; });
+    el.addEventListener('click', function(e) {
+      if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) return;
+      const sel = window.getSelection();
+      if (sel && sel.toString().length > 0) return;
+      row.classList.toggle('open');
+    });
+  }
+
+  makeToggle(row.querySelector('.node-btn'));
+  makeToggle(row.querySelector('.card-header'));
+  makeToggle(row.querySelector('.card-hint'));
+
+  tl.appendChild(row);
+  refreshCompletion();
+});
+
+// ── Tips ──
+const tg = document.getElementById('tips-grid');
+tips.forEach(function(t) {
+  const el = document.createElement('div');
+  el.className = 'tip';
+  el.innerHTML = '<span class="tip-icon">' + t.icon + '</span><span class="tip-text">' + t.text + '</span>';
+  tg.appendChild(el);
+});
+</script>
+</body>
+</html>

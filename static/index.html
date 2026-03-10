@@ -4,226 +4,1004 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Local AI Assistant</title>
-<!-- marked.js 用于 Markdown 渲染 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <style>
 :root {
-    --bg: #f3f5f8;
-    --panel: #ffffff;
-    --line: #d8dee9;
-    --text: #132238;
-    --sub: #4b5c77;
-    --brand: #1c7ed6;
-    --brand-dark: #1864ab;
-    --brand-2: #0ca678;
-    --danger: #e03131;
-    --danger-bg: #fff5f5;
-    --danger-border: #ffc9c9;
-    --code-bg: #1e293b;
-    --code-text: #e2e8f0;
+    --bg: #040d18;
+    --bg2: #060f1e;
+    --panel: rgba(6,16,32,0.92);
+    --panel-border: rgba(0,200,255,0.18);
+    --panel-glow: rgba(0,200,255,0.06);
+    --line: rgba(0,200,255,0.15);
+    --text: #c8e8ff;
+    --text-dim: #5a8aaa;
+    --brand: #00c8ff;
+    --brand-dark: #0088cc;
+    --brand-2: #00ffaa;
+    --brand-3: #ff6b35;
+    --danger: #ff3366;
+    --danger-bg: rgba(255,51,102,0.08);
+    --danger-border: rgba(255,51,102,0.3);
+    --code-bg: #020810;
+    --code-text: #7efff5;
+    --neon-glow: 0 0 8px rgba(0,200,255,0.6), 0 0 20px rgba(0,200,255,0.2);
+    --neon-glow-green: 0 0 8px rgba(0,255,170,0.6), 0 0 20px rgba(0,255,170,0.2);
+    --neon-glow-red: 0 0 8px rgba(255,51,102,0.6);
 }
+
 * { box-sizing: border-box; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.3); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--brand); }
+
+@keyframes scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+}
+@keyframes flicker { 0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:.8} 94%{opacity:1} 96%{opacity:.9} 97%{opacity:1} }
+@keyframes pulse-border { 0%,100%{border-color:rgba(0,200,255,0.2)} 50%{border-color:rgba(0,200,255,0.5)} }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
+@keyframes slide-in-left { from{transform:translateX(-12px);opacity:0} to{transform:translateX(0);opacity:1} }
+@keyframes slide-in-right { from{transform:translateX(12px);opacity:0} to{transform:translateX(0);opacity:1} }
+@keyframes fade-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+@keyframes grid-shift { 0%{background-position:0 0} 100%{background-position:40px 40px} }
+@keyframes corner-blink { 0%,100%{opacity:0.4} 50%{opacity:1} }
+@keyframes data-flow {
+    0%{background-position:0 0}
+    100%{background-position:0 -200px}
+}
+@keyframes typing-cursor { 0%,100%{opacity:1} 50%{opacity:0} }
+
 body {
     margin: 0;
-    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    background:
-        radial-gradient(circle at 10% 20%, #ddefff 0%, transparent 35%),
-        radial-gradient(circle at 90% 10%, #dffcf2 0%, transparent 32%),
-        var(--bg);
+    font-family: "Rajdhani", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
     color: var(--text);
-}
-.app {
-    display: grid;
-    grid-template-columns: 280px 1fr;
-    gap: 14px;
-    height: 100vh;
-    padding: 14px;
+    min-height: 100vh;
     overflow: hidden;
 }
+
+/* Background grid effect */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(0,200,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,200,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: grid-shift 8s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Ambient glow blobs */
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse at 15% 50%, rgba(0,200,255,0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 20%, rgba(0,255,170,0.04) 0%, transparent 40%),
+        radial-gradient(ellipse at 50% 100%, rgba(0,100,200,0.08) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.app {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    gap: 12px;
+    height: 100vh;
+    padding: 12px;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+}
+
+/* Panel base */
 .panel {
     background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    position: relative;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    overflow: hidden;
 }
 
-/* ---- 侧栏 ---- */
-.sidebar { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.sidebar-head { padding: 14px; border-bottom: 1px solid var(--line); }
-.sidebar-head h1 { margin: 0 0 10px 0; font-size: 17px; }
-.session-list { flex: 1; overflow-y: auto; padding: 8px; }
+/* Panel inner glow */
+.panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--panel-glow);
+    pointer-events: none;
+}
+
+/* Corner decorations */
+.panel::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--brand), transparent);
+    opacity: 0.6;
+}
+
+/* Corner brackets */
+.panel .corner-tl,
+.panel .corner-tr,
+.panel .corner-bl,
+.panel .corner-br {
+    position: absolute;
+    width: 12px; height: 12px;
+    z-index: 2;
+    animation: corner-blink 3s ease-in-out infinite;
+}
+.panel .corner-tl { top: 0; left: 0; border-top: 2px solid var(--brand); border-left: 2px solid var(--brand); }
+.panel .corner-tr { top: 0; right: 0; border-top: 2px solid var(--brand); border-right: 2px solid var(--brand); animation-delay: .75s; }
+.panel .corner-bl { bottom: 0; left: 0; border-bottom: 2px solid var(--brand); border-left: 2px solid var(--brand); animation-delay: 1.5s; }
+.panel .corner-br { bottom: 0; right: 0; border-bottom: 2px solid var(--brand); border-right: 2px solid var(--brand); animation-delay: 2.25s; }
+
+/* ---- SIDEBAR ---- */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    animation: flicker 8s infinite;
+}
+
+.sidebar-head {
+    padding: 16px 14px 12px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+}
+
+.sidebar-head::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--brand), transparent);
+    opacity: 0.5;
+}
+
+.sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.logo-icon {
+    width: 32px; height: 32px;
+    border: 1.5px solid var(--brand);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-family: "Orbitron", monospace;
+    font-weight: 900;
+    color: var(--brand);
+    text-shadow: var(--neon-glow);
+    box-shadow: 0 0 10px rgba(0,200,255,0.2), inset 0 0 8px rgba(0,200,255,0.1);
+    position: relative;
+}
+
+.logo-icon::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: 1px solid rgba(0,200,255,0.2);
+    border-radius: 2px;
+}
+
+.sidebar-head h1 {
+    margin: 0;
+    font-size: 13px;
+    font-family: "Orbitron", monospace;
+    font-weight: 700;
+    color: var(--brand);
+    text-shadow: var(--neon-glow);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.sidebar-head .sub-title {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: "Share Tech Mono", monospace;
+    letter-spacing: 0.1em;
+    margin-top: 1px;
+}
+
+.session-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.session-list-header {
+    font-size: 10px;
+    font-family: "Share Tech Mono", monospace;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 6px 4px 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.session-list-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
 .session-item {
-    border: 1px solid var(--line); border-radius: 10px; padding: 10px;
-    margin-bottom: 8px; cursor: pointer; background: #fff;
-    transition: border-color .15s, background .15s;
+    border: 1px solid rgba(0,200,255,0.1);
+    border-radius: 3px;
+    padding: 10px 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    background: rgba(0,200,255,0.03);
+    transition: all .2s ease;
+    position: relative;
+    overflow: hidden;
+    animation: fade-in .3s ease;
 }
-.session-item:hover { background: #f5f9ff; }
-.session-item.active { border-color: var(--brand); background: #eef6ff; }
-.session-item .name { font-size: 14px; font-weight: 600; }
-.session-item .meta { margin-top: 6px; font-size: 12px; color: var(--sub); }
 
-/* ---- 主区 ---- */
-.main { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.session-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--brand);
+    opacity: 0;
+    transition: opacity .2s;
+    box-shadow: var(--neon-glow);
+}
+
+.session-item:hover {
+    background: rgba(0,200,255,0.07);
+    border-color: rgba(0,200,255,0.3);
+}
+
+.session-item:hover::before { opacity: 1; }
+
+.session-item.active {
+    border-color: rgba(0,200,255,0.4);
+    background: rgba(0,200,255,0.08);
+    animation: pulse-border 2s ease-in-out infinite;
+}
+
+.session-item.active::before { opacity: 1; }
+
+.session-item .name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: "Rajdhani", sans-serif;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.session-item.active .name { color: var(--brand); }
+
+.session-item .meta {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: "Share Tech Mono", monospace;
+}
+
+/* ---- MAIN ---- */
+.main {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
 .toolbar {
-    display: flex; align-items: center; gap: 10px; padding: 12px;
-    border-bottom: 1px solid var(--line); flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+    background: rgba(0,0,0,0.2);
+    position: relative;
 }
-.toolbar label { font-size: 13px; color: var(--sub); }
 
-/* ---- 通用控件 ---- */
+.toolbar::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 5%; right: 5%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,200,255,0.3), transparent);
+}
+
+.toolbar label {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: "Share Tech Mono", monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* ---- BUTTONS ---- */
 .btn {
-    border: none; border-radius: 10px; padding: 10px 12px;
-    cursor: pointer; font-weight: 600; font-size: 14px; transition: opacity .15s;
-}
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn.primary { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-dark)); }
-.btn.outline { color: var(--text); background: #f6f8fb; border: 1px solid var(--line); }
-.btn.danger { color: var(--danger); background: var(--danger-bg); border: 1px solid var(--danger-border); }
-.btn.small { padding: 6px 10px; font-size: 12px; border-radius: 6px; }
-select, input[type="number"], textarea, input[type="text"] {
-    border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 14px;
-    font-family: inherit;
+    border: 1px solid var(--panel-border);
+    border-radius: 3px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    font-family: "Rajdhani", sans-serif;
+    transition: all .2s ease;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
 }
 
-/* ---- 聊天区 ---- */
-.chat { flex: 1; overflow-y: auto; padding: 14px; }
-.msg { display: flex; margin: 10px 0; width: 100%; align-items: flex-end; gap: 8px; }
-.msg.user { justify-content: flex-end; }
-.msg.ai { justify-content: flex-start; }
-.avatar {
-    width: 28px; height: 28px; border-radius: 50%; display: inline-flex;
-    align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
-    border: 1px solid var(--line); color: #1d3557; background: #fff; flex: 0 0 28px;
+.btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity .2s;
 }
-.msg.user .avatar { background: #d8ecff; border-color: #9ec5f8; }
-.msg.ai .avatar { background: #e7fff5; border-color: #97e4c6; }
-.bubble-wrap { display: flex; flex-direction: column; max-width: min(78%, 760px); }
+
+.btn:hover::before { opacity: 1; }
+.btn:disabled { opacity: .3; cursor: not-allowed; }
+
+.btn.primary {
+    color: var(--bg);
+    background: var(--brand);
+    border-color: var(--brand);
+    font-weight: 700;
+    box-shadow: 0 0 12px rgba(0,200,255,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+    text-shadow: none;
+}
+
+.btn.primary::before {
+    background: rgba(255,255,255,0.15);
+}
+
+.btn.primary:hover {
+    box-shadow: var(--neon-glow), inset 0 1px 0 rgba(255,255,255,0.2);
+    transform: translateY(-1px);
+}
+
+.btn.outline {
+    color: var(--brand);
+    background: rgba(0,200,255,0.05);
+    border-color: rgba(0,200,255,0.3);
+}
+
+.btn.outline::before { background: rgba(0,200,255,0.08); }
+.btn.outline:hover { border-color: var(--brand); box-shadow: 0 0 8px rgba(0,200,255,0.2); }
+
+.btn.danger {
+    color: var(--danger);
+    background: var(--danger-bg);
+    border-color: var(--danger-border);
+}
+
+.btn.danger:hover { box-shadow: var(--neon-glow-red); }
+
+.btn.small { padding: 5px 9px; font-size: 11px; border-radius: 2px; }
+
+/* ---- FORM CONTROLS ---- */
+select, input[type="number"], textarea, input[type="text"] {
+    border: 1px solid rgba(0,200,255,0.2);
+    border-radius: 3px;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: "Share Tech Mono", monospace;
+    background: rgba(0,10,25,0.8);
+    color: var(--brand);
+    transition: all .2s ease;
+    outline: none;
+}
+
+select:focus, input[type="number"]:focus, textarea:focus, input[type="text"]:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 8px rgba(0,200,255,0.2), inset 0 0 4px rgba(0,200,255,0.05);
+}
+
+select option { background: #040d18; color: var(--text); }
+
+/* ---- CHECKBOX ---- */
+input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 14px;
+    border: 1px solid rgba(0,200,255,0.4);
+    border-radius: 2px;
+    background: rgba(0,10,25,0.8);
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+    transition: all .2s;
+}
+
+input[type="checkbox"]:checked {
+    background: var(--brand);
+    border-color: var(--brand);
+    box-shadow: 0 0 6px rgba(0,200,255,0.5);
+}
+
+input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--bg);
+    font-size: 10px;
+    line-height: 1;
+}
+
+/* ---- CHAT AREA ---- */
+.chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    background: rgba(0,0,0,0.1);
+}
+
+/* Empty state */
+.chat:empty::after {
+    content: '// AWAITING INPUT...';
+    display: block;
+    text-align: center;
+    color: rgba(0,200,255,0.15);
+    font-family: "Share Tech Mono", monospace;
+    font-size: 14px;
+    letter-spacing: 0.2em;
+    margin-top: 40%;
+}
+
+.msg {
+    display: flex;
+    margin: 10px 0;
+    width: 100%;
+    align-items: flex-end;
+    gap: 10px;
+    animation: fade-in .25s ease;
+}
+
+.msg.user { justify-content: flex-end; animation-name: slide-in-right; }
+.msg.ai { justify-content: flex-start; animation-name: slide-in-left; }
+
+.avatar {
+    width: 30px; height: 30px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: "Orbitron", monospace;
+    flex: 0 0 30px;
+    position: relative;
+}
+
+.msg.user .avatar {
+    background: rgba(0,200,255,0.1);
+    border: 1px solid rgba(0,200,255,0.4);
+    color: var(--brand);
+    box-shadow: 0 0 8px rgba(0,200,255,0.15);
+}
+
+.msg.ai .avatar {
+    background: rgba(0,255,170,0.08);
+    border: 1px solid rgba(0,255,170,0.35);
+    color: var(--brand-2);
+    box-shadow: 0 0 8px rgba(0,255,170,0.15);
+}
+
+.bubble-wrap {
+    display: flex;
+    flex-direction: column;
+    max-width: min(78%, 760px);
+}
+
 .msg.user .bubble-wrap { align-items: flex-end; }
 .msg.ai .bubble-wrap { align-items: flex-start; }
-.role-tag { font-size: 11px; color: var(--sub); margin: 0 2px 4px 2px; }
-.bubble {
-    padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line);
-    line-height: 1.6; word-break: break-word;
-}
-.msg.user .bubble { background: #e7f1ff; border-color: #b9d8ff; white-space: pre-wrap; }
-.msg.ai .bubble { background: #f8fafc; }
 
-/* Markdown 渲染样式 */
+.role-tag {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin: 0 3px 4px 3px;
+    font-family: "Share Tech Mono", monospace;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.msg.ai .role-tag { color: rgba(0,255,170,0.5); }
+.msg.user .role-tag { color: rgba(0,200,255,0.5); }
+
+.bubble {
+    padding: 10px 14px;
+    border-radius: 3px;
+    line-height: 1.65;
+    word-break: break-word;
+    position: relative;
+    font-size: 14px;
+}
+
+.msg.user .bubble {
+    background: rgba(0,200,255,0.08);
+    border: 1px solid rgba(0,200,255,0.25);
+    color: var(--text);
+    white-space: pre-wrap;
+    border-top-right-radius: 1px;
+}
+
+.msg.user .bubble::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,200,255,0.4));
+}
+
+.msg.ai .bubble {
+    background: rgba(0,20,40,0.7);
+    border: 1px solid rgba(0,200,255,0.12);
+    border-top-left-radius: 1px;
+}
+
+.msg.ai .bubble::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0,255,170,0.4), transparent);
+}
+
+/* ---- MARKDOWN ---- */
 .md-content { min-width: 0; }
 .md-content p { margin: 0 0 8px; }
 .md-content p:last-child { margin-bottom: 0; }
+
 .md-content pre {
-    background: var(--code-bg); color: var(--code-text);
-    border-radius: 8px; padding: 12px; overflow-x: auto;
-    font-size: 13px; margin: 8px 0;
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 3px;
+    padding: 14px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    margin: 10px 0;
+    border: 1px solid rgba(0,255,240,0.1);
+    border-left: 2px solid rgba(0,255,240,0.4);
+    position: relative;
+    font-family: "Share Tech Mono", "Cascadia Code", monospace;
 }
+
+.md-content pre::before {
+    content: '// CODE';
+    position: absolute;
+    top: 6px; right: 10px;
+    font-size: 9px;
+    color: rgba(0,255,240,0.25);
+    letter-spacing: 0.15em;
+}
+
 .md-content code {
-    background: #eef2f7; padding: 2px 5px; border-radius: 4px;
-    font-size: 13px; font-family: "Cascadia Code", "Fira Code", monospace;
+    background: rgba(0,255,240,0.06);
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 12.5px;
+    font-family: "Share Tech Mono", monospace;
+    color: #7efff5;
+    border: 1px solid rgba(0,255,240,0.12);
 }
-.md-content pre code { background: none; padding: 0; }
-.md-content ul, .md-content ol { padding-left: 1.4em; margin: 4px 0 8px; }
-.md-content li { margin: 2px 0; }
-.md-content h1,.md-content h2,.md-content h3 { margin: 10px 0 4px; }
+
+.md-content pre code {
+    background: none;
+    padding: 0;
+    border: none;
+    color: var(--code-text);
+}
+
+.md-content ul, .md-content ol {
+    padding-left: 1.4em;
+    margin: 4px 0 8px;
+}
+
+.md-content li { margin: 3px 0; }
+.md-content li::marker { color: var(--brand); }
+
+.md-content h1,.md-content h2,.md-content h3 {
+    margin: 12px 0 6px;
+    font-family: "Orbitron", monospace;
+    color: var(--brand);
+    text-shadow: 0 0 10px rgba(0,200,255,0.3);
+    letter-spacing: 0.05em;
+}
+
+.md-content h1 { font-size: 16px; }
+.md-content h2 { font-size: 14px; }
+.md-content h3 { font-size: 13px; color: var(--brand-2); text-shadow: 0 0 10px rgba(0,255,170,0.3); }
+
 .md-content blockquote {
-    border-left: 3px solid var(--brand); margin: 8px 0;
-    padding: 4px 12px; color: var(--sub); background: #f0f6ff; border-radius: 0 6px 6px 0;
+    border-left: 2px solid var(--brand-2);
+    margin: 8px 0;
+    padding: 6px 12px;
+    color: var(--text-dim);
+    background: rgba(0,255,170,0.04);
+    border-radius: 0 3px 3px 0;
+    font-style: italic;
 }
-.md-content table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
-.md-content th, .md-content td { border: 1px solid var(--line); padding: 6px 10px; }
-.md-content th { background: #f0f4f8; }
 
-/* ---- 工具调用块 ---- */
+.md-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 12.5px;
+    font-family: "Share Tech Mono", monospace;
+}
+
+.md-content th, .md-content td {
+    border: 1px solid rgba(0,200,255,0.15);
+    padding: 7px 12px;
+}
+
+.md-content th {
+    background: rgba(0,200,255,0.08);
+    color: var(--brand);
+    font-family: "Orbitron", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+}
+
+.md-content tr:hover td { background: rgba(0,200,255,0.04); }
+
+.md-content a { color: var(--brand); text-decoration: none; border-bottom: 1px solid rgba(0,200,255,0.3); }
+.md-content a:hover { border-bottom-color: var(--brand); text-shadow: 0 0 6px rgba(0,200,255,0.4); }
+
+/* ---- TOOL BLOCK ---- */
 .tool-block {
-    margin-top: 10px; background: var(--code-bg); color: var(--code-text);
-    border-radius: 8px; padding: 12px; font-family: monospace; font-size: 13px;
-    border: 1px solid #334155;
+    margin-top: 10px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,107,53,0.3);
+    border-radius: 3px;
+    padding: 12px;
+    font-family: "Share Tech Mono", monospace;
+    font-size: 12.5px;
+    position: relative;
+    overflow: hidden;
 }
-.tool-title { color: #94a3b8; margin-bottom: 8px; font-weight: bold; }
-.tool-block pre { margin: 0; padding: 10px; background: #0f172a; border-radius: 6px; overflow-x: auto; }
-.tool-actions { margin-top: 10px; display: flex; gap: 8px; align-items: center; }
 
-/* ---- 输入区 ---- */
-.composer { border-top: 1px solid var(--line); padding: 12px; }
-.composer-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-#userInput { width: 100%; min-height: 44px; max-height: 120px; resize: vertical; }
+.tool-block::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,107,53,0.6), transparent);
+}
 
-/* ---- 知识库弹窗 ---- */
+.tool-title {
+    color: var(--brand-3);
+    margin-bottom: 8px;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(255,107,53,0.4);
+    letter-spacing: 0.05em;
+    font-size: 12px;
+}
+
+.tool-block pre {
+    margin: 0;
+    padding: 10px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 2px;
+    overflow-x: auto;
+    border: 1px solid rgba(255,107,53,0.15);
+    color: #ffaa7f;
+}
+
+.tool-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ---- INPUT COMPOSER ---- */
+.composer {
+    border-top: 1px solid var(--line);
+    padding: 12px;
+    background: rgba(0,0,0,0.2);
+    position: relative;
+}
+
+.composer::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 5%; right: 5%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,200,255,0.3), transparent);
+}
+
+.composer-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: end;
+}
+
+#userInput {
+    width: 100%;
+    min-height: 44px;
+    max-height: 120px;
+    resize: vertical;
+    background: rgba(0,10,25,0.9);
+    color: var(--text);
+    border: 1px solid rgba(0,200,255,0.2);
+    border-radius: 3px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: "Rajdhani", sans-serif;
+    line-height: 1.5;
+}
+
+#userInput:focus {
+    border-color: rgba(0,200,255,0.5);
+    box-shadow: 0 0 12px rgba(0,200,255,0.1), inset 0 0 6px rgba(0,200,255,0.04);
+    outline: none;
+}
+
+#userInput::placeholder {
+    color: rgba(90,138,170,0.5);
+    font-family: "Share Tech Mono", monospace;
+    font-size: 12px;
+}
+
+/* ---- STATUS INDICATOR ---- */
+.streaming-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--brand-2);
+    animation: blink .7s infinite;
+    vertical-align: middle;
+    margin-left: 6px;
+    box-shadow: var(--neon-glow-green);
+}
+
+/* ---- WEB SEARCH STATUS ---- */
+#webSearchStatus {
+    font-size: 11px;
+    font-family: "Share Tech Mono", monospace;
+    letter-spacing: 0.05em;
+    padding: 4px 8px;
+    border-radius: 2px;
+    border: 1px solid transparent;
+}
+
+/* ---- MODAL ---- */
 .modal {
-    display: none; position: fixed; z-index: 1000; inset: 0;
-    background: rgba(0,0,0,.45); align-items: center; justify-content: center;
-}
-.modal.open { display: flex; }
-.modal-content {
-    background: var(--panel); padding: 24px; border-radius: 14px;
-    width: 90%; max-width: 600px; max-height: 85vh; display: flex; flex-direction: column;
-}
-.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.modal-head h2 { margin: 0; font-size: 18px; }
-.close-btn { font-size: 24px; cursor: pointer; color: var(--sub); line-height: 1; }
-.hint {
-    font-size: 13px; color: var(--sub); background: #f8f9fa; padding: 10px;
-    border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--line); line-height: 1.6;
-}
-.kb-inputs { display: grid; gap: 10px; padding-bottom: 16px; border-bottom: 1px dashed var(--line); margin-bottom: 16px; }
-.kb-list-box { overflow-y: auto; flex: 1; }
-.kb-item {
-    border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 8px;
-    display: flex; justify-content: space-between; align-items: center; background: #fafbfc;
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
+    background: rgba(0,5,15,0.8);
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
 }
 
+.modal.open { display: flex; }
+
+.modal-content {
+    background: rgba(4,14,30,0.98);
+    border: 1px solid rgba(0,200,255,0.25);
+    border-radius: 4px;
+    padding: 24px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 0 60px rgba(0,200,255,0.1), 0 0 120px rgba(0,200,255,0.05);
+    animation: fade-in .2s ease;
+}
+
+.modal-content::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--brand), transparent);
+}
+
+.modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.modal-head h2 {
+    margin: 0;
+    font-size: 16px;
+    font-family: "Orbitron", monospace;
+    color: var(--brand);
+    text-shadow: var(--neon-glow);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.close-btn {
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-dim);
+    line-height: 1;
+    width: 28px; height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(0,200,255,0.2);
+    border-radius: 2px;
+    transition: all .2s;
+    font-family: monospace;
+}
+
+.close-btn:hover {
+    color: var(--brand);
+    border-color: var(--brand);
+    box-shadow: 0 0 8px rgba(0,200,255,0.2);
+}
+
+.hint {
+    font-size: 12px;
+    color: var(--text-dim);
+    background: rgba(0,200,255,0.04);
+    padding: 12px;
+    border-radius: 3px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(0,200,255,0.1);
+    line-height: 1.7;
+    font-family: "Share Tech Mono", monospace;
+    border-left: 2px solid rgba(0,200,255,0.3);
+}
+
+.hint strong { color: var(--brand); }
+
+.kb-inputs {
+    display: grid;
+    gap: 10px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 16px;
+}
+
+.kb-list-box { overflow-y: auto; flex: 1; }
+
+.kb-item {
+    border: 1px solid rgba(0,200,255,0.1);
+    border-radius: 3px;
+    padding: 10px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0,10,25,0.5);
+    transition: all .2s;
+}
+
+.kb-item:hover {
+    border-color: rgba(0,200,255,0.25);
+    background: rgba(0,200,255,0.04);
+}
+
+/* ---- SESSION DELETE BTN ---- */
 .session-item:hover .session-del-btn { opacity: 1; }
 .session-del-btn {
     opacity: 0;
     transition: opacity .15s;
     flex-shrink: 0;
-    padding: 4px 7px !important;
-    font-size: 11px !important;
 }
 
-/* ---- 状态指示 ---- */
-.streaming-dot {
-    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-    background: var(--brand-2); animation: blink 1s infinite;
-    vertical-align: middle; margin-left: 6px;
+/* ---- SECTION LABELS ---- */
+.section-label {
+    font-size: 10px;
+    font-family: "Orbitron", monospace;
+    color: var(--brand);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 8px;
+    text-shadow: 0 0 8px rgba(0,200,255,0.3);
 }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 
-/* ---- 响应式 ---- */
+/* ---- RESPONSIVE ---- */
 @media (max-width: 860px) {
     .app { grid-template-columns: 1fr; overflow: auto; height: auto; min-height: 100vh; }
     .sidebar { min-height: 220px; height: 300px; }
     .main { height: 600px; }
 }
+
+/* ---- SCAN LINE OVERLAY (subtle) ---- */
+.scanline-overlay {
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.04) 2px,
+        rgba(0,0,0,0.04) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+    animation: data-flow 10s linear infinite;
+}
 </style>
 </head>
 <body>
+
+<div class="scanline-overlay"></div>
+
 <div class="app">
+    <!-- SIDEBAR -->
     <aside class="panel sidebar">
+        <div class="corner-tl"></div><div class="corner-tr"></div>
+        <div class="corner-bl"></div><div class="corner-br"></div>
+
         <div class="sidebar-head">
-            <h1>本地 AI 助手</h1>
-            <button class="btn primary" id="newSessionBtn" style="width:100%">+ 新建对话</button>
+            <div class="sidebar-logo">
+                <div class="logo-icon">AI</div>
+                <div>
+                    <h1>Local AI</h1>
+                    <div class="sub-title">NEURAL INTERFACE v2.0</div>
+                </div>
+            </div>
+            <button class="btn primary" id="newSessionBtn" style="width:100%">⊕ 新建对话</button>
         </div>
-        <div class="session-list" id="sessionList"></div>
+
+        <div class="session-list" id="sessionList">
+            <div class="session-list-header">SESSIONS</div>
+        </div>
     </aside>
 
+    <!-- MAIN -->
     <section class="panel main">
+        <div class="corner-tl"></div><div class="corner-tr"></div>
+        <div class="corner-bl"></div><div class="corner-br"></div>
+
         <div class="toolbar">
-            <label>模型</label>
+            <label>MODEL</label>
             <select id="modelSelect"></select>
-            <label>上下文轮数</label>
-            <input id="turnsInput" type="number" min="1" max="50" value="8" style="width:60px">
-            <label><input type="checkbox" id="useRag" checked> 启用 RAG</label>
-            <button class="btn outline" id="saveSessionBtn">保存设置</button>
-            <button class="btn outline" id="kbBtn">📚 知识库</button>
-            <span id="webSearchStatus" style="font-size:12px;color:var(--sub);margin-left:4px"></span>
+            <label>CONTEXT</label>
+            <input id="turnsInput" type="number" min="1" max="50" value="8" style="width:58px">
+            <label><input type="checkbox" id="useRag" checked> RAG</label>
+            <button class="btn outline small" id="saveSessionBtn">保存</button>
+            <button class="btn outline small" id="kbBtn">⬡ 知识库</button>
+            <span id="webSearchStatus"></span>
         </div>
 
         <div class="chat" id="chatBox"></div>
 
         <div class="composer">
             <div class="composer-row">
-                <textarea id="userInput" placeholder="输入你想问的，或者让 AI 运行一段命令... (Enter 发送，Shift+Enter 换行)"></textarea>
-                <button class="btn primary" id="sendBtn">发送</button>
+                <textarea id="userInput" placeholder="// input query... (Enter 发送 / Shift+Enter 换行)"></textarea>
+                <button class="btn primary" id="sendBtn" style="height:44px;min-width:72px">发送</button>
             </div>
         </div>
     </section>
@@ -233,34 +1011,28 @@ select, input[type="number"], textarea, input[type="text"] {
 <div id="kbModal" class="modal">
     <div class="modal-content">
         <div class="modal-head">
-            <h2>📚 专属知识库设置</h2>
-            <span class="close-btn" id="kbCloseBtn">&times;</span>
+            <h2>⬡ Knowledge Base</h2>
+            <span class="close-btn" id="kbCloseBtn">✕</span>
         </div>
         <div class="hint">
-            <strong>使用说明</strong><br>
+            <strong>// USAGE</strong><br>
             1. 在此处添加私有文档资料（如工作规范、学习笔记）。<br>
-            2. 确保聊天页面的 <strong>"启用 RAG"</strong> 已勾选。<br>
+            2. 确保聊天页面的 <strong>RAG</strong> 已启用。<br>
             3. 聊天时，AI 会自动从知识库检索相关内容再回答。
         </div>
         <div class="kb-inputs">
-            <input id="kbTitle" type="text" placeholder="资料标题（如：公司请假制度）">
-            <textarea id="kbContent" rows="3" placeholder="资料详细内容..."></textarea>
-            <button class="btn primary" id="addKbBtn">添加至知识库</button>
+            <input id="kbTitle" type="text" placeholder="// 资料标题（如：公司请假制度）">
+            <textarea id="kbContent" rows="3" placeholder="// 资料详细内容..." style="resize:vertical"></textarea>
+            <button class="btn primary" id="addKbBtn">⊕ 添加至知识库</button>
         </div>
-        <h3 style="margin:0 0 8px">已有知识文档</h3>
+        <div class="section-label">已有知识文档</div>
         <div class="kb-list-box" id="kbList"></div>
     </div>
 </div>
 
 <script>
-// ============================================================
-// 配置
-// ============================================================
 marked.setOptions({ breaks: true, gfm: true });
 
-// ============================================================
-// 应用状态（集中管理）
-// ============================================================
 const state = {
     currentSessionId: null,
     sessions: [],
@@ -268,9 +1040,6 @@ const state = {
     isStreaming: false,
 };
 
-// ============================================================
-// 工具函数
-// ============================================================
 function escapeHtml(text = "") {
     return String(text)
         .replace(/&/g, "&amp;")
@@ -295,9 +1064,6 @@ function jsonPost(url, body) {
     });
 }
 
-// ============================================================
-// 渲染辅助
-// ============================================================
 function renderMarkdown(text) {
     const div = document.createElement("div");
     div.className = "md-content";
@@ -319,17 +1085,17 @@ function addMessage(role, text) {
 
     const tag = document.createElement("div");
     tag.className = "role-tag";
-    tag.textContent = role === "user" ? "用户" : "AI 助手";
+    tag.textContent = role === "user" ? "USER" : "AI_CORE";
 
     const bubble = document.createElement("div");
     bubble.className = "bubble";
 
     if (role === "user") {
-        bubble.textContent = text;          // 用户消息保持纯文本，防 XSS
+        bubble.textContent = text;
     } else {
         const mdDiv = document.createElement("div");
         mdDiv.className = "md-content";
-        bubble.appendChild(mdDiv);          // AI 消息支持 Markdown
+        bubble.appendChild(mdDiv);
     }
 
     wrap.append(tag, bubble);
@@ -340,7 +1106,6 @@ function addMessage(role, text) {
     return bubble;
 }
 
-/** 将流式 token 追加到 AI 气泡，并实时渲染 Markdown。 */
 function appendToken(bubble, fullText) {
     const mdDiv = bubble.querySelector(".md-content");
     if (mdDiv) mdDiv.innerHTML = marked.parse(fullText);
@@ -351,22 +1116,28 @@ function renderToolApproval(bubble, toolCalls) {
         const name = tc.function?.name;
         const args = tc.function?.arguments || {};
 
-        // 根据工具名决定展示内容
         let title, content, lang;
         if (name === "run_python") {
-            title   = "⚡ 代理需要执行 Python 代码：";
+            title   = "⚡ EXEC_REQUEST :: Python";
             content = args.code || "";
             lang    = "python";
         } else if (name === "run_shell") {
-            title   = "🖥️ 代理需要执行终端命令：";
+            title   = "🖥️ EXEC_REQUEST :: Shell";
             content = args.command || "";
             lang    = "shell";
         } else if (name === "web_search") {
-            title   = "🌐 代理需要联网搜索：";
+            title   = "🌐 NET_REQUEST :: Web Search";
             content = `query: ${args.query || ""}${args.max_results ? `\nmax_results: ${args.max_results}` : ""}`;
             lang    = "yaml";
+        } else if (name === "write_file") {
+            title   = "📄 WRITE_REQUEST :: File";
+            content = `filename: ${args.filename || ""}\n\n${args.content || ""}`;
+            lang    = "plaintext";
         } else {
-            return; // 未知工具不渲染
+            title = "⚠️ UNKNOWN_REQUEST";
+            content = JSON.stringify(tc, null, 2);
+            lang = "json";
+            return;
         }
 
         const tcData = encodeURIComponent(JSON.stringify(toolCalls)).replace(/'/g, "%27");
@@ -377,8 +1148,8 @@ function renderToolApproval(bubble, toolCalls) {
             <div class="tool-title">${title}</div>
             <pre><code class="lang-${lang}">${escapeHtml(content)}</code></pre>
             <div class="tool-actions">
-                <button class="btn primary small" onclick="approveTool(this,'${tcData}')">允许执行</button>
-                <button class="btn danger small" onclick="denyTool(this)">拒绝</button>
+                <button class="btn primary small" onclick="approveTool(this,'${tcData}')">✓ AUTHORIZE</button>
+                <button class="btn danger small" onclick="denyTool(this)">✕ DENY</button>
             </div>`;
         bubble.appendChild(block);
     });
@@ -386,16 +1157,16 @@ function renderToolApproval(bubble, toolCalls) {
 
 function renderSessions() {
     const box = document.getElementById("sessionList");
-    box.innerHTML = "";
+    box.innerHTML = '<div class="session-list-header">SESSIONS</div>';
     state.sessions.forEach(s => {
         const div = document.createElement("div");
         div.className = `session-item${s.id === state.currentSessionId ? " active" : ""}`;
 
         const info = document.createElement("div");
-        info.style.cssText = "flex:1;min-width:0;cursor:pointer";
+        info.style.cssText = "flex:1;min-width:0;cursor:pointer;overflow:hidden";
         info.innerHTML = `
             <div class="name">${escapeHtml(s.name)}</div>
-            <div class="meta">模型: ${escapeHtml(s.model)} | 消息: ${s.message_count}</div>`;
+            <div class="meta">MDL: ${escapeHtml(s.model)} | MSG: ${s.message_count}</div>`;
         info.onclick = () => selectSession(s.id);
 
         const delBtn = document.createElement("button");
@@ -415,32 +1186,21 @@ function renderSessions() {
 async function deleteSession(sessionId, sessionName) {
     if (state.isStreaming) { alert("当前正在生成，请稍候再删除！"); return; }
     if (!confirm(`确定删除对话「${sessionName}」吗？`)) return;
-
     await api(`/sessions/${sessionId}`, { method: "DELETE" });
-
-    // 如果删的是当前会话，清空聊天区
     if (state.currentSessionId === sessionId) {
         state.currentSessionId = null;
         document.getElementById("chatBox").innerHTML = "";
     }
-
     await loadSessions();
-
-    // 自动选中第一个剩余会话
     if (!state.currentSessionId && state.sessions.length) {
         await selectSession(state.sessions[0].id);
     }
 }
 
-// ============================================================
-// 流式请求
-// ============================================================
 async function handleStream(url, bodyObject, aiBubble) {
     state.isStreaming = true;
     updateSendButton();
-
     let fullText = "";
-
     try {
         const res = await fetch(url, {
             method: "POST",
@@ -464,7 +1224,6 @@ async function handleStream(url, bodyObject, aiBubble) {
                 buffer = buffer.slice(idx + 1);
 
                 if (!line) {
-                    // 一个完整事件结束
                     if (currentEvent === "token" && currentData) {
                         const { text } = JSON.parse(currentData);
                         fullText += text || "";
@@ -475,7 +1234,7 @@ async function handleStream(url, bodyObject, aiBubble) {
                     } else if (currentEvent === "error" && currentData) {
                         const { error } = JSON.parse(currentData);
                         const mdDiv = aiBubble.querySelector(".md-content");
-                        if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[错误] ${escapeHtml(error)}</p>`;
+                        if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[ERR] ${escapeHtml(error)}</p>`;
                     }
                     currentEvent = "message"; currentData = "";
                     continue;
@@ -486,12 +1245,11 @@ async function handleStream(url, bodyObject, aiBubble) {
                     currentData = currentData ? `${currentData}\n${chunk}` : chunk;
                 }
             }
-
             document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
         }
     } catch (e) {
         const mdDiv = aiBubble.querySelector(".md-content");
-        if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[请求异常] ${escapeHtml(e.message)}</p>`;
+        if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[EXCEPTION] ${escapeHtml(e.message)}</p>`;
     } finally {
         state.isStreaming = false;
         updateSendButton();
@@ -499,37 +1257,30 @@ async function handleStream(url, bodyObject, aiBubble) {
     }
 }
 
-// ============================================================
-// 工具授权
-// ============================================================
 async function approveTool(btnEl, tcData) {
     if (state.isStreaming || !state.currentSessionId) return;
     const actionsDiv = btnEl.parentElement;
-    actionsDiv.innerHTML = "<span style='color:#38b2ac'>⏳ 正在后台执行，请稍候...</span>";
+    actionsDiv.innerHTML = "<span style='color:var(--brand-2);font-family:monospace;font-size:11px'>✓ AUTHORIZED — EXECUTING...</span>";
     const toolCalls = JSON.parse(decodeURIComponent(tcData));
-    const bubble = actionsDiv.closest(".bubble");
-    await handleStream(`/sessions/${state.currentSessionId}/tool_stream`, { tool_calls: toolCalls }, bubble);
+    // 创建新的 AI 消息气泡，结果展示在新对话框中
+    const resultBubble = addMessage("ai", "");
+    await handleStream(`/sessions/${state.currentSessionId}/tool_stream`, { tool_calls: toolCalls }, resultBubble);
 }
 
 function denyTool(btnEl) {
-    btnEl.parentElement.innerHTML = "<span style='color:#fc8181'>已拒绝授权执行</span>";
+    btnEl.parentElement.innerHTML = "<span style='color:var(--danger)'>✕ ACCESS DENIED</span>";
     state.isStreaming = false;
     updateSendButton();
 }
 
-// ============================================================
-// 消息发送
-// ============================================================
 async function sendMessage() {
     if (state.isStreaming || !state.currentSessionId) return;
     const input = document.getElementById("userInput");
     const text = input.value.trim();
     if (!text) return;
-
     input.value = "";
     addMessage("user", text);
     const aiBubble = addMessage("ai", "");
-
     const useRag = document.getElementById("useRag").checked;
     await handleStream(
         `/sessions/${state.currentSessionId}/stream`,
@@ -538,16 +1289,13 @@ async function sendMessage() {
     );
 }
 
-// ============================================================
-// 会话管理
-// ============================================================
 async function loadModels() {
     const data = await api("/models");
     state.models = data.models || [];
     const select = document.getElementById("modelSelect");
     select.innerHTML = "";
     if (!state.models.length) {
-        select.innerHTML = "<option value=''>未发现模型</option>";
+        select.innerHTML = "<option value=''>// NO MODELS</option>";
         select.disabled = true;
         return;
     }
@@ -565,13 +1313,14 @@ async function loadToolConfig() {
         const ws = data.tools?.web_search;
         const el = document.getElementById("webSearchStatus");
         if (ws?.enabled) {
-            el.innerHTML = "🌐 联网搜索 <span style='color:var(--brand-2)'>✓ 已启用</span>";
+            el.innerHTML = "🌐 NET <span style='color:var(--brand-2);text-shadow:var(--neon-glow-green)'>ONLINE</span>";
+            el.style.borderColor = "rgba(0,255,170,0.2)";
+            el.style.background = "rgba(0,255,170,0.04)";
         } else {
-            el.innerHTML = "🌐 联网搜索 <span style='color:#aaa'>✗ 未配置 TAVILY_API_KEY</span>";
+            el.innerHTML = "🌐 NET <span style='color:rgba(255,255,255,0.2)'>OFFLINE</span>";
+            el.style.borderColor = "rgba(255,255,255,0.06)";
         }
-    } catch {
-        // 静默失败，不影响主流程
-    }
+    } catch { /* silent */ }
 }
 
 async function loadSessions() {
@@ -595,24 +1344,21 @@ async function selectSession(sessionId) {
     if (state.isStreaming) { alert("当前对话正在生成，请稍后切换！"); return; }
     state.currentSessionId = sessionId;
     renderSessions();
-
     const session = state.sessions.find(s => s.id === sessionId);
     if (session) {
         document.getElementById("modelSelect").value = session.model;
         document.getElementById("turnsInput").value = session.max_turns;
     }
-
     const data = await api(`/sessions/${sessionId}/messages`);
     const chat = document.getElementById("chatBox");
     chat.innerHTML = "";
-
     (data.messages || []).forEach(m => {
         if (m.role === "system" || m.role === "tool") return;
         const bubble = addMessage(m.role === "assistant" ? "ai" : "user", m.content || "");
         if (m.tool_calls?.length) {
             renderToolApproval(bubble, m.tool_calls);
             bubble.querySelectorAll(".tool-actions").forEach(
-                act => (act.innerHTML = "<span style='color:#64748b'>（历史记录：工具交互已结束）</span>")
+                act => (act.innerHTML = "<span style='color:var(--text-dim);font-family:monospace;font-size:11px'>// HISTORY: TOOL SESSION CLOSED</span>")
             );
         }
     });
@@ -631,9 +1377,6 @@ async function saveSessionConfig() {
     await loadSessions();
 }
 
-// ============================================================
-// 知识库
-// ============================================================
 function openKbModal() { document.getElementById("kbModal").classList.add("open"); loadKbDocs(); }
 function closeKbModal() { document.getElementById("kbModal").classList.remove("open"); }
 
@@ -643,7 +1386,7 @@ async function loadKbDocs() {
     list.innerHTML = "";
     const docs = data.documents || [];
     if (!docs.length) {
-        list.innerHTML = "<div style='color:#888;text-align:center;padding:20px 0'>暂无文档</div>";
+        list.innerHTML = "<div style='color:var(--text-dim);text-align:center;padding:20px 0;font-family:monospace;font-size:12px'>// NO DOCUMENTS FOUND</div>";
         return;
     }
     docs.forEach(d => {
@@ -651,10 +1394,10 @@ async function loadKbDocs() {
         item.className = "kb-item";
         item.innerHTML = `
             <div style="flex:1;margin-right:10px;overflow:hidden">
-                <div style="font-weight:600;font-size:14px;margin-bottom:4px">${escapeHtml(d.title)}</div>
-                <div style="font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(d.content)}</div>
+                <div style="font-weight:600;font-size:13px;margin-bottom:3px;color:var(--brand)">${escapeHtml(d.title)}</div>
+                <div style="font-size:11px;color:var(--text-dim);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(d.content)}</div>
             </div>
-            <button class="btn danger small" onclick="deleteKbDoc('${d.id}')">删除</button>`;
+            <button class="btn danger small" onclick="deleteKbDoc('${d.id}')">✕</button>`;
         list.appendChild(item);
     });
 }
@@ -676,18 +1419,16 @@ async function deleteKbDoc(id) {
     await loadKbDocs();
 }
 
-// ============================================================
-// UI 状态同步
-// ============================================================
 function updateSendButton() {
     const btn = document.getElementById("sendBtn");
     btn.disabled = state.isStreaming;
-    btn.textContent = state.isStreaming ? "生成中…" : "发送";
+    if (state.isStreaming) {
+        btn.innerHTML = `生成中<span class="streaming-dot"></span>`;
+    } else {
+        btn.textContent = "发送";
+    }
 }
 
-// ============================================================
-// 事件绑定
-// ============================================================
 function bindEvents() {
     document.getElementById("newSessionBtn").onclick = createSession;
     document.getElementById("sendBtn").onclick = sendMessage;
@@ -695,20 +1436,14 @@ function bindEvents() {
     document.getElementById("kbBtn").onclick = openKbModal;
     document.getElementById("kbCloseBtn").onclick = closeKbModal;
     document.getElementById("addKbBtn").onclick = addKnowledge;
-
-    // 点击弹窗背景关闭
     document.getElementById("kbModal").onclick = e => {
         if (e.target === document.getElementById("kbModal")) closeKbModal();
     };
-
     document.getElementById("userInput").addEventListener("keydown", e => {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
 }
 
-// ============================================================
-// 初始化
-// ============================================================
 async function init() {
     bindEvents();
     await loadModels();
@@ -717,7 +1452,7 @@ async function init() {
     if (!state.currentSessionId) await createSession();
 }
 
-init().catch(e => alert("初始化失败: " + e.message));
+init().catch(e => alert("INIT_FAIL: " + e.message));
 </script>
 </body>
 </html>
