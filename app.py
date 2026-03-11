@@ -230,6 +230,50 @@ def session_messages(session: SessionState = Depends(get_session_dep)):
     return {"messages": session.messages}
 
 
+@app.get("/sessions/{session_id}/export")
+def export_session(session: SessionState = Depends(get_session_dep)):
+    """将会话导出为 Markdown 文本，供前端下载。"""
+    lines = [
+        f"# {session.name}",
+        f"",
+        f"- **模型**: {session.model}",
+        f"- **创建时间**: {session.created_at}",
+        f"- **消息数**: {len(session.messages)}",
+        f"",
+        "---",
+        "",
+    ]
+    for msg in session.messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "") or ""
+        if role == "system":
+            continue
+        elif role == "user":
+            lines += [f"## 👤 用户", "", content, ""]
+        elif role == "assistant":
+            lines += [f"## 🤖 AI ({session.model})", "", content]
+            for tc in msg.get("tool_calls", []):
+                fn = tc.get("function", {})
+                args_str = json.dumps(fn.get("arguments", {}), ensure_ascii=False, indent=2)
+                lines += ["", f"**工具调用**: `{fn.get('name')}`", f"```json{args_str}```"]
+            lines.append("")
+        elif role == "tool":
+            name = msg.get("name", "tool")
+            lines += [f"### ⚙ 工具结果: `{name}`", "", f"```{content}```", ""]
+        lines.append("---")
+        lines.append("")
+
+    md_text = "".join(lines)
+    from fastapi.responses import Response
+    safe_name = "".join(c for c in session.name if c.isalnum() or c in "_ -")[:40]
+    filename  = f"{safe_name}_{session.id[:8]}.md"
+    return Response(
+        content=md_text.encode("utf-8"),
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # 路由：流式对话
 # ---------------------------------------------------------------------------

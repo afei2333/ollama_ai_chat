@@ -479,7 +479,7 @@ input[type="checkbox"]:checked::after {
     display: flex;
     margin: 10px 0;
     width: 100%;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 10px;
     animation: fade-in .25s ease;
 }
@@ -1012,6 +1012,7 @@ input[type="checkbox"]:checked::after {
             <label><input type="checkbox" id="useRag" checked> RAG</label>
             <button class="btn outline small" id="saveSessionBtn">保存</button>
             <button class="btn outline small" id="kbBtn">⬡ 知识库</button>
+            <button class="btn outline small" id="exportBtn">↓ 导出</button>
             <span id="webSearchStatus"></span>
             <span id="googleStatus"></span>
         </div>
@@ -1096,7 +1097,14 @@ function renderMarkdown(text) {
 // 用 WeakMap 存储工具调用数据，避免将 JSON 塞进 onclick 字符串（脆弱且有 XSS 风险）
 const _toolCallStore = new WeakMap();
 
-function addMessage(role, text) {
+// 智能滚动：仅当用户已在底部附近（100px 内）时才自动跟随
+function smartScroll() {
+    const chat = document.getElementById("chatBox");
+    const nearBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 100;
+    if (nearBottom) chat.scrollTop = chat.scrollHeight;
+}
+
+function addMessage(role, text, skipScroll) {
     const chat = document.getElementById("chatBox");
     const msg = document.createElement("div");
     msg.className = `msg ${role}`;
@@ -1120,6 +1128,7 @@ function addMessage(role, text) {
     } else {
         const mdDiv = document.createElement("div");
         mdDiv.className = "md-content";
+        if (text) mdDiv.innerHTML = marked.parse(text);
         bubble.appendChild(mdDiv);
     }
 
@@ -1131,13 +1140,35 @@ function addMessage(role, text) {
         msg.append(avatar, wrap);
     }
     chat.appendChild(msg);
-    chat.scrollTop = chat.scrollHeight;
+    if (!skipScroll) chat.scrollTop = chat.scrollHeight;
     return bubble;
 }
 
 function appendToken(bubble, fullText) {
     const mdDiv = bubble.querySelector(".md-content");
     if (mdDiv) mdDiv.innerHTML = marked.parse(fullText);
+}
+
+function renderToolResult(msg) {
+    // 在聊天框中渲染工具执行结果（历史记录）
+    const chat = document.getElementById("chatBox");
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "margin: 4px 0 4px 52px; max-width: 85%;";
+
+    const block = document.createElement("div");
+    block.className = "tool-block";
+    const toolName = escapeHtml(msg.name || "tool");
+    const output   = msg.content || "";
+    const isError  = output.startsWith("[") && output.includes("错误");
+    block.innerHTML = `
+        <div class="tool-title" style="color:${isError ? "var(--danger)" : "var(--brand-2)"}">
+            ${isError ? "⚠" : "✓"} TOOL_RESULT :: ${toolName}
+        </div>
+        <pre style="max-height:200px;overflow-y:auto;margin:6px 0 0"><code>${escapeHtml(output)}</code></pre>`;
+
+    wrap.appendChild(block);
+    chat.appendChild(wrap);
+    smartScroll();
 }
 
 function renderToolApproval(bubble, toolCalls) {
@@ -1305,7 +1336,7 @@ async function handleStream(url, bodyObject, aiBubble) {
                 processLine(buffer.slice(0, idx));
                 buffer = buffer.slice(idx + 1);
             }
-            document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
+            smartScroll();
         }
     } catch (e) {
         const mdDiv = aiBubble.querySelector(".md-content");
@@ -1489,15 +1520,26 @@ async function selectSession(sessionId) {
     const chat = document.getElementById("chatBox");
     chat.innerHTML = "";
     (data.messages || []).forEach(m => {
-        if (m.role === "system" || m.role === "tool") return;
-        const bubble = addMessage(m.role === "assistant" ? "ai" : "user", m.content || "");
+        if (m.role === "system") return;
+
+        if (m.role === "tool") {
+            // 工具执行结果：展示在独立的结果块中
+            renderToolResult(m);
+            return;
+        }
+
+        const bubble = addMessage(m.role === "assistant" ? "ai" : "user", m.content || "", true);
+
         if (m.tool_calls?.length) {
+            // 历史工具调用：展示调用详情，但关闭操作按钮
             renderToolApproval(bubble, m.tool_calls);
             bubble.querySelectorAll(".tool-actions").forEach(
                 act => (act.innerHTML = "<span style='color:var(--text-dim);font-family:monospace;font-size:11px'>// HISTORY: TOOL SESSION CLOSED</span>")
             );
         }
     });
+    // 加载完历史消息后滚动到底部
+    chat.scrollTop = chat.scrollHeight;
 }
 
 async function saveSessionConfig() {
@@ -1555,6 +1597,13 @@ async function deleteKbDoc(id) {
     await loadKbDocs();
 }
 
+function exportSession() {
+    if (!state.currentSessionId) return;
+    const a = document.createElement("a");
+    a.href = `/sessions/${state.currentSessionId}/export`;
+    a.click();
+}
+
 function updateSendButton() {
     const btn = document.getElementById("sendBtn");
     btn.disabled = state.isStreaming;
@@ -1572,6 +1621,7 @@ function bindEvents() {
     document.getElementById("kbBtn").onclick = openKbModal;
     document.getElementById("kbCloseBtn").onclick = closeKbModal;
     document.getElementById("addKbBtn").onclick = addKnowledge;
+    document.getElementById("exportBtn").onclick = exportSession;
     document.getElementById("kbModal").onclick = e => {
         if (e.target === document.getElementById("kbModal")) closeKbModal();
     };
