@@ -19,7 +19,7 @@ DATA_DIR      = "data"
 KB_FILE       = os.path.join(DATA_DIR, "kb.json")
 SESSIONS_FILE = os.path.join(DATA_DIR, "sessions.json")
 
-DEFAULT_MODEL    = "qwen2.5:7b"
+DEFAULT_MODEL    = "qwen3.5:9b"
 DEFAULT_MAX_TURNS = 8
 TOOL_TIMEOUT     = 30       # 秒
 LLM_NUM_CTX      = 8192     # 上下文窗口大小
@@ -28,6 +28,23 @@ LLM_MAX_RETRIES  = 2        # JSON 解析失败最大重试次数
 
 # Tavily API Key
 TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+
+# ---------------------------------------------------------------------------
+# Google Gemini 配置
+# ---------------------------------------------------------------------------
+
+GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+GOOGLE_HTTP_PROXY: str = os.getenv("GOOGLE_HTTP_PROXY", "")  # 可选代理，如 http://127.0.0.1:10808
+
+# Google 模型列表（前缀 "google:" 标识，用于前端/后端路由区分）
+GOOGLE_MODELS: List[str] = [
+    "google:gemini-3-flash-preview",
+    "google:gemini-3.1-pro-preview",
+]
+
+def is_google_model(model: str) -> bool:
+    """判断是否为 Google 模型（以 'google:' 开头）。"""
+    return model.startswith("google:")
 
 # ---------------------------------------------------------------------------
 # 默认系统提示词

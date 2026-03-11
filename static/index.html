@@ -794,6 +794,20 @@ input[type="checkbox"]:checked::after {
     border: 1px solid transparent;
 }
 
+#googleStatus {
+    font-size: 11px;
+    font-family: "Share Tech Mono", monospace;
+    letter-spacing: 0.05em;
+    padding: 4px 8px;
+    border-radius: 2px;
+    border: 1px solid transparent;
+}
+
+/* Provider select highlight */
+#providerSelect option[value="google"] {
+    color: #a78bfa;
+}
+
 /* ---- MODAL ---- */
 .modal {
     display: none;
@@ -986,6 +1000,11 @@ input[type="checkbox"]:checked::after {
         <div class="corner-bl"></div><div class="corner-br"></div>
 
         <div class="toolbar">
+            <label>PROVIDER</label>
+            <select id="providerSelect" onchange="onProviderChange()">
+                <option value="ollama">⚙ OLLAMA</option>
+                <option value="google">✦ GOOGLE</option>
+            </select>
             <label>MODEL</label>
             <select id="modelSelect"></select>
             <label>CONTEXT</label>
@@ -994,6 +1013,7 @@ input[type="checkbox"]:checked::after {
             <button class="btn outline small" id="saveSessionBtn">保存</button>
             <button class="btn outline small" id="kbBtn">⬡ 知识库</button>
             <span id="webSearchStatus"></span>
+            <span id="googleStatus"></span>
         </div>
 
         <div class="chat" id="chatBox"></div>
@@ -1036,7 +1056,9 @@ marked.setOptions({ breaks: true, gfm: true });
 const state = {
     currentSessionId: null,
     sessions: [],
-    models: [],
+    models: [],        // 当前 provider 过滤后的模型
+    allModels: [],     // 服务端返回的全部模型
+    provider: "ollama", // "ollama" | "google"
     isStreaming: false,
 };
 
@@ -1320,6 +1342,19 @@ async function sendMessage() {
     const input = document.getElementById("userInput");
     const text = input.value.trim();
     if (!text) return;
+
+    // 发送前自动将当前选择的模型同步到 session，确保 provider 切换生效
+    const selectedModel = document.getElementById("modelSelect").value;
+    const maxTurns = Number(document.getElementById("turnsInput").value || 8);
+    const currentSession = state.sessions.find(s => s.id === state.currentSessionId);
+    if (currentSession && currentSession.model !== selectedModel) {
+        await api(`/sessions/${state.currentSessionId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: selectedModel, max_turns: maxTurns }),
+        });
+    }
+
     input.value = "";
     addMessage("user", text);
     const aiBubble = addMessage("ai", "");
@@ -1331,22 +1366,62 @@ async function sendMessage() {
     );
 }
 
-async function loadModels() {
-    const data = await api("/models");
-    state.models = data.models || [];
+// ── Provider 切换 ──────────────────────────────────────────────────────────
+function onProviderChange() {
+    const sel = document.getElementById("providerSelect");
+    state.provider = sel.value;
+    filterModelsByProvider();
+}
+
+function filterModelsByProvider() {
     const select = document.getElementById("modelSelect");
+    const prev = select.value;
     select.innerHTML = "";
-    if (!state.models.length) {
-        select.innerHTML = "<option value=''>// NO MODELS</option>";
+
+    const filtered = state.allModels.filter(m =>
+        state.provider === "google"
+            ? m.startsWith("google:")
+            : !m.startsWith("google:")
+    );
+
+    state.models = filtered;
+
+    if (!filtered.length) {
+        const msg = state.provider === "google"
+            ? "// 请配置 GOOGLE_API_KEY"
+            : "// NO OLLAMA MODELS";
+        select.innerHTML = `<option value=''>${msg}</option>`;
         select.disabled = true;
         return;
     }
     select.disabled = false;
-    state.models.forEach(m => {
+    filtered.forEach(m => {
         const opt = document.createElement("option");
-        opt.value = opt.text = m;
+        // 显示时去掉 "google:" 前缀，value 保留完整名
+        opt.value = m;
+        opt.text  = m.startsWith("google:") ? m.replace("google:", "✦ ") : m;
         select.appendChild(opt);
     });
+
+    // 尽量保持之前选中的模型
+    if (filtered.includes(prev)) select.value = prev;
+}
+
+async function loadModels() {
+    const data = await api("/models");
+    state.allModels = data.models || [];
+
+    // 自动检测当前 session 的 provider
+    if (state.currentSessionId) {
+        const session = state.sessions.find(s => s.id === state.currentSessionId);
+        if (session) {
+            const isGoogle = session.model.startsWith("google:");
+            state.provider = isGoogle ? "google" : "ollama";
+            document.getElementById("providerSelect").value = state.provider;
+        }
+    }
+
+    filterModelsByProvider();
 }
 
 async function loadToolConfig() {
@@ -1361,6 +1436,20 @@ async function loadToolConfig() {
         } else {
             el.innerHTML = "🌐 NET <span style='color:rgba(255,255,255,0.2)'>OFFLINE</span>";
             el.style.borderColor = "rgba(255,255,255,0.06)";
+        }
+
+        // Google 状态
+        const goog = data.providers?.google;
+        const gel = document.getElementById("googleStatus");
+        if (gel) {
+            if (goog?.enabled) {
+                gel.innerHTML = "✦ GEMINI <span style='color:#a78bfa;text-shadow:0 0 8px rgba(167,139,250,0.6)'>ONLINE</span>";
+                gel.style.borderColor = "rgba(167,139,250,0.25)";
+                gel.style.background = "rgba(167,139,250,0.05)";
+            } else {
+                gel.innerHTML = "✦ GEMINI <span style='color:rgba(255,255,255,0.2)'>OFFLINE</span>";
+                gel.style.borderColor = "rgba(255,255,255,0.06)";
+            }
         }
     } catch { /* silent */ }
 }
@@ -1388,6 +1477,11 @@ async function selectSession(sessionId) {
     renderSessions();
     const session = state.sessions.find(s => s.id === sessionId);
     if (session) {
+        // 根据 session 的模型自动切换 provider
+        const isGoogle = session.model.startsWith("google:");
+        state.provider = isGoogle ? "google" : "ollama";
+        document.getElementById("providerSelect").value = state.provider;
+        filterModelsByProvider();
         document.getElementById("modelSelect").value = session.model;
         document.getElementById("turnsInput").value = session.max_turns;
     }

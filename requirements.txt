@@ -1,3 +1,6 @@
 fastapi
 uvicorn
 ollama
+tavily-python
+google-genai
+dotenv

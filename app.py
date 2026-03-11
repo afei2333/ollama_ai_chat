@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ollama_client import ChatManager, SessionState, TAVILY_API_KEY
+from config import GOOGLE_API_KEY
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -35,6 +36,7 @@ manager = ChatManager()
 async def lifespan(app: FastAPI):
     log.info("=== Local AI Assistant 启动 ===")
     log.info("Tavily 联网搜索: %s", "已启用" if TAVILY_API_KEY else "未配置（缺少 TAVILY_API_KEY）")
+    log.info("Google Gemini: %s", "已启用" if GOOGLE_API_KEY else "未配置（缺少 GOOGLE_API_KEY）")
     yield
     log.info("=== 服务关闭，卸载模型 ===")
     manager.unload_model()
@@ -178,7 +180,13 @@ def get_tool_config():
                 "enabled": bool(TAVILY_API_KEY),
                 "description": "网络搜索 (Tavily)",
             },
-        }
+        },
+        "providers": {
+            "google": {
+                "enabled": bool(GOOGLE_API_KEY),
+                "description": "Google Gemini API",
+            },
+        },
     }
 
 

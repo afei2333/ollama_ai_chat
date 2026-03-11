@@ -23,11 +23,15 @@ from config import (
     DEFAULT_MAX_TURNS,
     DEFAULT_MODEL,
     DEFAULT_SYSTEM_PROMPT,
+    GOOGLE_API_KEY,
+    GOOGLE_MODELS,
     LLM_MAX_RETRIES,
     LLM_NUM_CTX,
     LLM_NUM_PREDICT,
     TOOL_DEFINITIONS,
+    is_google_model,
 )
+from google_client import stream_google, serialize_google_content, deserialize_google_content
 from models import SessionState
 from storage import KnowledgeBase, SessionStore, now_iso
 from tool_parser import extract_tool_calls_from_text, normalize_tool_call
@@ -199,9 +203,58 @@ class ChatManager:
     def _stream_internal(
         self, session: SessionState, model_messages: List[Dict[str, Any]]
     ) -> Generator[Dict[str, Any], None, None]:
-        """核心流式请求，处理文本流与工具调用保存，支持 JSON 解析失败自动重试。"""
+        """核心流式请求，自动根据模型名路由到 Ollama 或 Google Gemini。"""
         self.last_used_model = session.model
 
+        # ── 路由到 Google Gemini ─────────────────────────────────────────────
+        if is_google_model(session.model):
+            yield from self._stream_google_internal(session, model_messages)
+            return
+
+        # ── 路由到 Ollama（原有逻辑）────────────────────────────────────────
+        yield from self._stream_ollama_internal(session, model_messages)
+
+    def _stream_google_internal(
+        self, session: SessionState, model_messages: List[Dict[str, Any]]
+    ) -> Generator[Dict[str, Any], None, None]:
+        """调用 Google Gemini API 流式推理。"""
+        llm_logger.debug(
+            "── GOOGLE LLM REQUEST ── session=%s model=%s messages=%d",
+            session.id[:8], session.model, len(model_messages),
+        )
+        logger.info(
+            "开始 Google 请求 session=%s model=%s 消息数=%d",
+            session.id[:8], session.model, len(model_messages),
+        )
+        try:
+            full_content       = ""
+            final_tool_calls: List[Dict[str, Any]] = []
+            google_raw_content: Any = None
+
+            for event in stream_google(session.model, model_messages):
+                if event["type"] == "text":
+                    full_content += event["content"]
+                    yield event
+                elif event["type"] == "tool_call":
+                    final_tool_calls   = event["tool_calls"]
+                    full_content       = event.get("full_content", full_content)
+                    google_raw_content = event.get("_google_raw_content")
+
+            self._log_llm_response(session, full_content, final_tool_calls)
+            self._persist_response(session, full_content, final_tool_calls, google_raw_content)
+
+            if final_tool_calls:
+                yield {"type": "tool_call", "tool_calls": final_tool_calls}
+
+        except Exception as exc:
+            logger.error("Google 请求异常 session=%s: %s", session.id[:8], exc, exc_info=True)
+            self._store.pop_last_user_message(session)
+            raise
+
+    def _stream_ollama_internal(
+        self, session: SessionState, model_messages: List[Dict[str, Any]]
+    ) -> Generator[Dict[str, Any], None, None]:
+        """调用 Ollama 流式推理，支持 JSON 解析失败自动重试。"""
         llm_logger.debug(
             "── LLM REQUEST ── session=%s model=%s messages=%d\n%s",
             session.id[:8], session.model, len(model_messages),
@@ -291,12 +344,20 @@ class ChatManager:
         session: SessionState,
         full_content: str,
         tool_calls: List[Dict[str, Any]],
+        google_raw_content: Any = None,
     ) -> None:
         if tool_calls:
-            self._store.append_message(
-                session,
-                {"role": "assistant", "content": full_content, "tool_calls": tool_calls},
-            )
+            msg: Dict[str, Any] = {
+                "role": "assistant",
+                "content": full_content,
+                "tool_calls": tool_calls,
+            }
+            # 序列化 Google 原始 Content（含 thought_signature）后存入，确保 JSON 可序列化
+            if google_raw_content is not None:
+                serialized = serialize_google_content(google_raw_content)
+                if serialized is not None:
+                    msg["_google_raw_content"] = serialized
+            self._store.append_message(session, msg)
         elif full_content:
             self._store.append_message(session, {"role": "assistant", "content": full_content})
 
@@ -344,18 +405,28 @@ class ChatManager:
     # -----------------------------------------------------------------------
 
     def list_models(self) -> List[str]:
+        models: List[str] = []
+
+        # Ollama 本地模型
         try:
             resp = ollama.list()
-            # Ollama SDK 返回对象，兼容 dict 和 object
             models_raw = _get_attr(resp, "models", []) or []
             names = [
                 _get_attr(item, "name") or _get_attr(item, "model")
                 for item in models_raw
             ]
-            unique = sorted({n for n in names if n})
-            return unique or [self.default_model]
+            models.extend(sorted({n for n in names if n}))
         except Exception:
-            return [self.default_model]
+            pass
+
+        if not models:
+            models.append(self.default_model)
+
+        # Google 模型（仅当配置了 API Key 时加入）
+        if GOOGLE_API_KEY:
+            models.extend(GOOGLE_MODELS)
+
+        return models
 
     def unload_model(self, model: Optional[str] = None) -> None:
         target = model or self.last_used_model
@@ -366,4 +437,3 @@ class ChatManager:
             logger.info("模型 %s 已卸载。", target)
         except Exception as exc:
             logger.warning("卸载模型 %s 失败: %s", target, exc)
-
