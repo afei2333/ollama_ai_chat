@@ -5,3 +5,4 @@ data
 logs
 ./data/sessions.json
 test
+bots.json
