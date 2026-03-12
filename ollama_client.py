@@ -22,8 +22,8 @@ from config import (           # noqa: F401
 )
 from models import KnowledgeDoc, SessionState          # noqa: F401
 from storage import KnowledgeBase, SessionStore, now_iso  # noqa: F401
-from tools import ToolExecutor                         # noqa: F401
-from tool_parser import (                              # noqa: F401
+from tool.tools import ToolExecutor                         # noqa: F401
+from tool.tool_parser import (                              # noqa: F401
     normalize_tool_call,
     extract_tool_calls_from_text,
 )

@@ -11,8 +11,9 @@ app.py — FastAPI 入口
 """
 
 import json
+import threading
 from contextlib import asynccontextmanager
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
@@ -30,6 +31,10 @@ log = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 manager = ChatManager()
+
+# session_id → threading.Event，用于中断正在生成的 SSE 流
+# 每次开始新流时写入，流结束或被中断后清除
+_abort_events: Dict[str, threading.Event] = {}
 
 
 @asynccontextmanager
@@ -117,10 +122,16 @@ def get_session_dep(session_id: str) -> SessionState:
     return session
 
 
-def _sse_generator(generator, session_id: str):
-    """将内部事件流包装成 SSE 格式字节流。"""
+def _sse_generator(generator, session_id: str, abort_event: threading.Event):
+    """将内部事件流包装成 SSE 格式字节流，支持通过 abort_event 中断。"""
     try:
         for item in generator:
+            # 每帧检查中断信号
+            if abort_event.is_set():
+                log.info("SSE 流被中断 session=%s", session_id[:8])
+                yield f"event: aborted\ndata: {{}}\n\n"
+                return
+
             if item["type"] == "text":
                 payload = json.dumps({"text": item["content"]}, ensure_ascii=False)
                 yield f"event: token\ndata: {payload}\n\n"
@@ -135,6 +146,9 @@ def _sse_generator(generator, session_id: str):
         log.error("SSE 流异常 session=%s: %s", session_id[:8], err, exc_info=True)
         error_payload = json.dumps({"error": str(err)}, ensure_ascii=False)
         yield f"event: error\ndata: {error_payload}\n\n"
+    finally:
+        # 流结束（正常/异常/中断）都清理信号
+        _abort_events.pop(session_id, None)
 
 
 SSE_HEADERS = {
@@ -145,8 +159,10 @@ SSE_HEADERS = {
 
 
 def _streaming_response(generator, session_id: str) -> StreamingResponse:
+    abort_event = threading.Event()
+    _abort_events[session_id] = abort_event
     return StreamingResponse(
-        _sse_generator(generator, session_id),
+        _sse_generator(generator, session_id, abort_event),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
@@ -300,6 +316,17 @@ def stream_tool_chat(
     """用户确认工具执行后调用此接口，将工具输出喂回模型继续生成。"""
     gen = manager.execute_and_stream(session, req.tool_calls)
     return _streaming_response(gen, session.id)
+
+
+@app.post("/sessions/{session_id}/abort")
+def abort_stream(session_id: str):
+    """中断指定 session 正在进行的流式生成。"""
+    event = _abort_events.get(session_id)
+    if event:
+        event.set()
+        log.info("中断信号已发送 session=%s", session_id[:8])
+        return {"aborted": True}
+    return {"aborted": False, "detail": "该 session 当前没有正在进行的生成"}
 
 
 # ---------------------------------------------------------------------------

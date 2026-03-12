@@ -1022,7 +1022,10 @@ input[type="checkbox"]:checked::after {
         <div class="composer">
             <div class="composer-row">
                 <textarea id="userInput" placeholder="// input query... (Enter 发送 / Shift+Enter 换行)"></textarea>
-                <button class="btn primary" id="sendBtn" style="height:44px;min-width:72px">发送</button>
+                <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+                    <button class="btn primary" id="sendBtn" style="height:44px;min-width:72px">发送</button>
+                    <button class="btn danger small" id="abortBtn" style="display:none;height:28px;font-size:11px;letter-spacing:0.05em">■ 中断</button>
+                </div>
             </div>
         </div>
     </section>
@@ -1104,6 +1107,7 @@ function smartScroll() {
     if (nearBottom) chat.scrollTop = chat.scrollHeight;
 }
 
+// skipScroll=true 用于批量渲染历史消息时，避免每条都触发滚动
 function addMessage(role, text, skipScroll) {
     const chat = document.getElementById("chatBox");
     const msg = document.createElement("div");
@@ -1128,12 +1132,12 @@ function addMessage(role, text, skipScroll) {
     } else {
         const mdDiv = document.createElement("div");
         mdDiv.className = "md-content";
+        // 有初始内容时（加载历史）直接渲染 markdown，不留空
         if (text) mdDiv.innerHTML = marked.parse(text);
         bubble.appendChild(mdDiv);
     }
 
     wrap.append(tag, bubble);
-    // 修复：原代码第一行 msg.append 和第二行 if 判断重复插入，导致子元素重复
     if (role === "user") {
         msg.append(wrap, avatar);
     } else {
@@ -1268,8 +1272,23 @@ async function deleteSession(sessionId, sessionName) {
     }
 }
 
+// 当前流式请求的 AbortController，用于前端中断 fetch
+let _currentAbortController = null;
+
+async function abortGeneration() {
+    if (!state.isStreaming || !state.currentSessionId) return;
+    // 1. 通知后端停止生成
+    fetch(`/sessions/${state.currentSessionId}/abort`, { method: "POST" }).catch(() => {});
+    // 2. 前端侧中止 fetch 读取
+    if (_currentAbortController) {
+        _currentAbortController.abort();
+        _currentAbortController = null;
+    }
+}
+
 async function handleStream(url, bodyObject, aiBubble) {
     state.isStreaming = true;
+    _currentAbortController = new AbortController();
     updateSendButton();
     let fullText = "";
     try {
@@ -1277,6 +1296,7 @@ async function handleStream(url, bodyObject, aiBubble) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(bodyObject),
+            signal: _currentAbortController.signal,
         });
         if (!res.ok) throw new Error("请求失败，请检查服务状态");
 
@@ -1300,6 +1320,12 @@ async function handleStream(url, bodyObject, aiBubble) {
                         const { tool_calls } = JSON.parse(currentData);
                         renderToolApproval(aiBubble, tool_calls);
                     } catch { /* 解析失败，跳过 */ }
+                } else if (currentEvent === "aborted") {
+                    // 后端确认中断，在气泡末尾加标记
+                    const mdDiv = aiBubble.querySelector(".md-content");
+                    if (mdDiv) {
+                        mdDiv.innerHTML += `<p style="color:var(--text-dim);font-family:monospace;font-size:11px;margin-top:6px">// generation aborted</p>`;
+                    }
                 } else if (currentEvent === "error" && currentData) {
                     try {
                         const { error } = JSON.parse(currentData);
@@ -1339,10 +1365,15 @@ async function handleStream(url, bodyObject, aiBubble) {
             smartScroll();
         }
     } catch (e) {
-        const mdDiv = aiBubble.querySelector(".md-content");
-        if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[EXCEPTION] ${escapeHtml(e.message)}</p>`;
+        if (e.name === "AbortError") {
+            // fetch 被前端主动中止，气泡已由 aborted 事件处理，此处静默
+        } else {
+            const mdDiv = aiBubble.querySelector(".md-content");
+            if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[EXCEPTION] ${escapeHtml(e.message)}</p>`;
+        }
     } finally {
         state.isStreaming = false;
+        _currentAbortController = null;
         updateSendButton();
         await loadSessions();
     }
@@ -1528,6 +1559,7 @@ async function selectSession(sessionId) {
             return;
         }
 
+        // skipScroll=true：批量渲染时不逐条滚动，最后统一滚到底
         const bubble = addMessage(m.role === "assistant" ? "ai" : "user", m.content || "", true);
 
         if (m.tool_calls?.length) {
@@ -1538,7 +1570,7 @@ async function selectSession(sessionId) {
             );
         }
     });
-    // 加载完历史消息后滚动到底部
+    // 历史加载完毕后滚到底部
     chat.scrollTop = chat.scrollHeight;
 }
 
@@ -1606,17 +1638,21 @@ function exportSession() {
 
 function updateSendButton() {
     const btn = document.getElementById("sendBtn");
+    const abortBtn = document.getElementById("abortBtn");
     btn.disabled = state.isStreaming;
     if (state.isStreaming) {
         btn.innerHTML = `生成中<span class="streaming-dot"></span>`;
+        abortBtn.style.display = "block";
     } else {
         btn.textContent = "发送";
+        abortBtn.style.display = "none";
     }
 }
 
 function bindEvents() {
     document.getElementById("newSessionBtn").onclick = createSession;
     document.getElementById("sendBtn").onclick = sendMessage;
+    document.getElementById("abortBtn").onclick = abortGeneration;
     document.getElementById("saveSessionBtn").onclick = saveSessionConfig;
     document.getElementById("kbBtn").onclick = openKbModal;
     document.getElementById("kbCloseBtn").onclick = closeKbModal;

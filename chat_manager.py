@@ -34,8 +34,8 @@ from config import (
 from google_client import stream_google, serialize_google_content, deserialize_google_content
 from models import SessionState
 from storage import KnowledgeBase, SessionStore, now_iso
-from tool_parser import extract_tool_calls_from_text, normalize_tool_call
-from tools import ToolExecutor
+from tool.tool_parser import extract_tool_calls_from_text, normalize_tool_call
+from tool.tools import ToolExecutor
 from logger import get_logger, get_llm_logger
 
 logger     = get_logger(__name__)

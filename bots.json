@@ -1,0 +1,29 @@
+[
+  {
+    "app_id":     "1903386659",
+    "app_secret": "mV0HMFwRjogLm03t",
+    "name":       "客服Bot",
+    "model":      "qwen3.5:9b",
+    "sandbox":    false,
+    "max_length": 1500,
+    "system_prompt": "你是一个客服助手，请礼貌、简洁地回答用户问题。"
+  },
+  {
+    "app_id":     "1903387257",
+    "app_secret": "qnlkjhcVOE1nXFxe",
+    "name":       "编程Bot",
+    "model":      "qwen3.5:9b",
+    "sandbox":    false,
+    "max_length": 2000,
+    "system_prompt": "你是一个编程助手，擅长代码调试和技术问题解答。"
+  },
+  {
+    "app_id":     "1903388286",
+    "app_secret": "8A2g6LNBl8JFwObZ",
+    "name":       "编程Bot",
+    "model":      "qwen3.5:9b",
+    "sandbox":    false,
+    "max_length": 2000,
+    "system_prompt": "你是一个智能ai助手，擅长解答各种问题。"
+  }
+]
