@@ -120,80 +120,130 @@ class BotInstance:
 
     # ── AI 生成（同步，在线程池运行）────────────────────────────────────
 
-    def _sync_generate(
-        self, session_id: str, user_text: str, stop_event: threading.Event
-    ) -> str:
+    def _sync_generate_into_queue(
+        self,
+        session_id: str,
+        user_text: str,
+        stop_event: threading.Event,
+        queue: asyncio.Queue,
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+        """
+        ReAct 生成线程：每产出一条消息立即 put 进 queue，
+        协程侧收到后即时发送，无需等待所有步骤完成。
+        生成结束后放入哨兵 None 通知协程退出。
+        """
+        def put(msg: str) -> None:
+            """线程安全地向 asyncio.Queue 投递，阻塞直到投递完成。"""
+            asyncio.run_coroutine_threadsafe(queue.put(msg), loop).result()
+
         session = _shared_manager.get_session(session_id)
         if not session:
-            return "抱歉，会话异常，请稍后重试。"
+            put("抱歉，会话异常，请稍后重试。")
+            put(None)
+            return
 
-        full_text, pending = "", []
+        final_answer = ""
 
-        # 第一轮：用户消息 → 模型
-        for ev in _shared_manager.stream_chat(session=session, user_message=user_text):
-            if stop_event.is_set():
-                log.info("[%s] 生成被 /stop 中断（第一轮）", self.name)
-                break
-            if ev["type"] == "text":
-                full_text += ev["content"]
-            elif ev["type"] == "tool_call":
-                pending = ev["tool_calls"]
-
-        # 工具调用循环（最多 5 轮）
-        for _r in range(5):
-            if not pending or stop_event.is_set():
-                break
-            names = [tc.get("function", {}).get("name") for tc in pending]
-            log.info("[%s] 执行工具 round=%d  %s", self.name, _r + 1, names)
-            for tc in pending:
+        try:
+            for ev in _shared_manager.stream_chat(session=session, user_message=user_text):
                 if stop_event.is_set():
+                    log.info("[%s] 生成被 /stop 中断", self.name)
                     break
-                fn  = tc.get("function", {})
-                out = _shared_manager._executor.execute(
-                    fn.get("name", ""), fn.get("arguments", {}))
-                _shared_manager._store.append_message(
-                    session, {"role": "tool", "name": fn.get("name", ""), "content": out})
-            if stop_event.is_set():
-                break
-            pending = []
-            for ev in _shared_manager._stream_internal(
-                session, _shared_manager._build_model_messages(session)
-            ):
-                if stop_event.is_set():
-                    break
-                if ev["type"] == "text":
-                    full_text += ev["content"]
-                elif ev["type"] == "tool_call":
-                    pending = ev["tool_calls"]
 
-        text = full_text.strip() or "（AI 无回复）"
+                etype = ev.get("type")
+
+                if etype in ("token", "text"):
+                    final_answer += ev.get("content", "")
+
+                elif etype == "react_step":
+                    step         = ev.get("step", "?")
+                    thought      = ev.get("thought", "").strip()
+                    action       = ev.get("action", "").strip()
+                    action_input = ev.get("action_input", {})
+                    observation  = ev.get("observation", "").strip()
+
+                    log.info(
+                        "[%s] ReAct step=%s action=%s session=%s",
+                        self.name, step, action, session_id[:8],
+                    )
+
+                    parts = [f"🔍 推理步骤 {step}"]
+                    if thought:
+                        parts.append(f"💭 {thought}")
+                    if action:
+                        if isinstance(action_input, dict):
+                            args_str = "、".join(f"{k}={v}" for k, v in action_input.items())
+                        else:
+                            args_str = str(action_input)
+                        parts.append(f"⚡ 调用工具: {action}({args_str})")
+                    if observation:
+                        obs_preview = observation if len(observation) <= 300 else observation[:300] + "…"
+                        parts.append(f"📋 执行结果:\n{obs_preview}")
+
+                    step_msg = "\n".join(parts)
+                    if len(step_msg) > self.max_length:
+                        step_msg = step_msg[:self.max_length] + "\n…（内容过长已截断）"
+
+                    # 步骤完成 → 立即投递，不等待后续步骤
+                    put(step_msg)
+
+        except Exception as exc:
+            log.error("[%s] 生成异常: %s", self.name, exc, exc_info=True)
+            put(f"生成出错：{exc}")
+            put(None)
+            return
+
+        # Final Answer → 投递后结束
+        text = final_answer.strip() or "（AI 无回复）"
         if len(text) > self.max_length:
             text = text[:self.max_length] + "\n…（内容过长已截断）"
-        if stop_event.is_set() and full_text:
+        if stop_event.is_set() and final_answer:
             text += "\n[已中断]"
-        return text
+        put(text)
+        put(None)  # 哨兵：通知协程生成已结束
 
-    # ── AI 生成（异步包装）───────────────────────────────────────────────
+    # ── AI 生成（异步驱动，边生成边发送）────────────────────────────────
 
-    async def _generate(self, scope_key: str, session_id: str, user_text: str) -> str:
+    async def _generate_and_send(
+        self,
+        scope_key: str,
+        session_id: str,
+        user_text: str,
+        send_fn,   # Callable[[str, int], Coroutine]，参数：消息文本、msg_seq
+    ) -> None:
+        """
+        启动生成线程，从 queue 中逐条取出消息并调用 send_fn 发送。
+        取到一条就发一条，不等所有步骤完成。
+        """
         stop_event = threading.Event()
-        loop = asyncio.get_event_loop()
+        loop       = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
 
-        async def _run() -> str:
-            try:
-                return await loop.run_in_executor(
-                    None, self._sync_generate, session_id, user_text, stop_event
-                )
-            except asyncio.CancelledError:
-                stop_event.set()   # 通知线程尽快退出生成循环
-                raise
-
-        task = asyncio.create_task(_run())
+        # 在线程池中运行同步生成，向 queue 实时投递
+        future = loop.run_in_executor(
+            None,
+            self._sync_generate_into_queue,
+            session_id, user_text, stop_event, queue, loop,
+        )
+        task = asyncio.ensure_future(future)
         self._tasks[scope_key] = task
+
+        seq = 1
         try:
-            return await task
+            while True:
+                msg = await queue.get()
+                if msg is None:       # 哨兵：生成结束
+                    break
+                try:
+                    await send_fn(msg, seq)
+                    seq += 1
+                except Exception as exc:
+                    log.warning("[%s] 发送第 %d 条消息失败: %s", self.name, seq, exc)
+            await future             # 等待线程池任务彻底结束
         except asyncio.CancelledError:
-            return "（已中断）"
+            stop_event.set()         # 通知生成线程尽快退出
+            raise
         finally:
             self._tasks.pop(scope_key, None)
 
@@ -244,9 +294,12 @@ class BotInstance:
             return
 
         log.info("[%s] 私聊  user=%s  text=%.50s", self.name, openid[:12], content)
-        sid   = self._get_session(openid, "c2c")
-        reply = await self._generate(scope_key, sid, content)
-        await self._client.send_c2c(openid, reply, msg_id)
+        sid = self._get_session(openid, "c2c")
+
+        async def send_fn(text: str, seq: int) -> None:
+            await self._client.send_c2c(openid, text, msg_id, msg_seq=seq)
+
+        await self._generate_and_send(scope_key, sid, content, send_fn)
 
     # ── 群聊处理 ─────────────────────────────────────────────────────────
 
@@ -275,9 +328,12 @@ class BotInstance:
             return
 
         log.info("[%s] 群消息  group=%s  text=%.50s", self.name, group_openid[:12], content)
-        sid   = self._get_session(group_openid, "group")
-        reply = await self._generate(scope_key, sid, content)
-        await self._client.send_group(group_openid, reply, msg_id)
+        sid = self._get_session(group_openid, "group")
+
+        async def send_fn(text: str, seq: int) -> None:
+            await self._client.send_group(group_openid, text, msg_id, msg_seq=seq)
+
+        await self._generate_and_send(scope_key, sid, content, send_fn)
 
     # ── 启动 ─────────────────────────────────────────────────────────────
 

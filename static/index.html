@@ -39,23 +39,7 @@
 ::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.3); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--brand); }
 
-@keyframes scanline {
-    0% { transform: translateY(-100%); }
-    100% { transform: translateY(100vh); }
-}
-@keyframes flicker { 0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:.8} 94%{opacity:1} 96%{opacity:.9} 97%{opacity:1} }
-@keyframes pulse-border { 0%,100%{border-color:rgba(0,200,255,0.2)} 50%{border-color:rgba(0,200,255,0.5)} }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
-@keyframes slide-in-left { from{transform:translateX(-12px);opacity:0} to{transform:translateX(0);opacity:1} }
-@keyframes slide-in-right { from{transform:translateX(12px);opacity:0} to{transform:translateX(0);opacity:1} }
-@keyframes fade-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-@keyframes grid-shift { 0%{background-position:0 0} 100%{background-position:40px 40px} }
-@keyframes corner-blink { 0%,100%{opacity:0.4} 50%{opacity:1} }
-@keyframes data-flow {
-    0%{background-position:0 0}
-    100%{background-position:0 -200px}
-}
-@keyframes typing-cursor { 0%,100%{opacity:1} 50%{opacity:0} }
+/* animations removed */
 
 body {
     margin: 0;
@@ -75,7 +59,6 @@ body::before {
         linear-gradient(rgba(0,200,255,0.03) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0,200,255,0.03) 1px, transparent 1px);
     background-size: 40px 40px;
-    animation: grid-shift 8s linear infinite;
     pointer-events: none;
     z-index: 0;
 }
@@ -142,12 +125,12 @@ body::after {
     position: absolute;
     width: 12px; height: 12px;
     z-index: 2;
-    animation: corner-blink 3s ease-in-out infinite;
+    opacity: 0.7;
 }
 .panel .corner-tl { top: 0; left: 0; border-top: 2px solid var(--brand); border-left: 2px solid var(--brand); }
-.panel .corner-tr { top: 0; right: 0; border-top: 2px solid var(--brand); border-right: 2px solid var(--brand); animation-delay: .75s; }
-.panel .corner-bl { bottom: 0; left: 0; border-bottom: 2px solid var(--brand); border-left: 2px solid var(--brand); animation-delay: 1.5s; }
-.panel .corner-br { bottom: 0; right: 0; border-bottom: 2px solid var(--brand); border-right: 2px solid var(--brand); animation-delay: 2.25s; }
+.panel .corner-tr { top: 0; right: 0; border-top: 2px solid var(--brand); border-right: 2px solid var(--brand); }
+.panel .corner-bl { bottom: 0; left: 0; border-bottom: 2px solid var(--brand); border-left: 2px solid var(--brand); }
+.panel .corner-br { bottom: 0; right: 0; border-bottom: 2px solid var(--brand); border-right: 2px solid var(--brand); }
 
 /* ---- SIDEBAR ---- */
 .sidebar {
@@ -155,7 +138,6 @@ body::after {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    animation: flicker 8s infinite;
 }
 
 .sidebar-head {
@@ -258,7 +240,6 @@ body::after {
     transition: all .2s ease;
     position: relative;
     overflow: hidden;
-    animation: fade-in .3s ease;
 }
 
 .session-item::before {
@@ -282,7 +263,6 @@ body::after {
 .session-item.active {
     border-color: rgba(0,200,255,0.4);
     background: rgba(0,200,255,0.08);
-    animation: pulse-border 2s ease-in-out infinite;
 }
 
 .session-item.active::before { opacity: 1; }
@@ -481,11 +461,10 @@ input[type="checkbox"]:checked::after {
     width: 100%;
     align-items: flex-start;
     gap: 10px;
-    animation: fade-in .25s ease;
 }
 
-.msg.user { justify-content: flex-end; animation-name: slide-in-right; }
-.msg.ai { justify-content: flex-start; animation-name: slide-in-left; }
+.msg.user { justify-content: flex-end; }
+.msg.ai { justify-content: flex-start; }
 
 .avatar {
     width: 30px; height: 30px;
@@ -778,7 +757,6 @@ input[type="checkbox"]:checked::after {
     width: 7px; height: 7px;
     border-radius: 50%;
     background: var(--brand-2);
-    animation: blink .7s infinite;
     vertical-align: middle;
     margin-left: 6px;
     box-shadow: var(--neon-glow-green);
@@ -834,7 +812,6 @@ input[type="checkbox"]:checked::after {
     flex-direction: column;
     position: relative;
     box-shadow: 0 0 60px rgba(0,200,255,0.1), 0 0 120px rgba(0,200,255,0.05);
-    animation: fade-in .2s ease;
 }
 
 .modal-content::before {
@@ -951,6 +928,88 @@ input[type="checkbox"]:checked::after {
     .main { height: 600px; }
 }
 
+/* ---- REACT STEP BLOCK ---- */
+.react-step {
+    margin-top: 8px;
+    background: rgba(0,255,170,0.03);
+    border: 1px solid rgba(0,255,170,0.15);
+    border-left: 2px solid rgba(0,255,170,0.5);
+    border-radius: 3px;
+    padding: 10px 12px;
+    font-family: "Share Tech Mono", monospace;
+    font-size: 11.5px;
+    position: relative;
+    overflow: hidden;
+}
+
+.react-step::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0,255,170,0.5), transparent);
+}
+
+.react-step-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+    color: var(--brand-2);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: var(--neon-glow-green);
+}
+
+.react-step-badge {
+    background: rgba(0,255,170,0.12);
+    border: 1px solid rgba(0,255,170,0.3);
+    border-radius: 2px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-family: "Orbitron", monospace;
+}
+
+.react-step-row {
+    display: grid;
+    grid-template-columns: 68px 1fr;
+    gap: 4px 8px;
+    margin-bottom: 3px;
+    line-height: 1.5;
+}
+
+.react-step-label {
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    font-size: 10.5px;
+    text-transform: uppercase;
+}
+
+.react-step-value {
+    color: var(--text);
+    word-break: break-all;
+}
+
+.react-step-value.action {
+    color: var(--brand-3);
+    text-shadow: 0 0 6px rgba(255,107,53,0.3);
+}
+
+.react-obs {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 2px;
+    border: 1px solid rgba(0,255,170,0.08);
+    color: #aaddcc;
+    max-height: 100px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 11px;
+}
+
 /* ---- SCAN LINE OVERLAY (subtle) ---- */
 .scanline-overlay {
     position: fixed;
@@ -964,7 +1023,6 @@ input[type="checkbox"]:checked::after {
     );
     pointer-events: none;
     z-index: 999;
-    animation: data-flow 10s linear infinite;
 }
 </style>
 </head>
@@ -1100,6 +1158,75 @@ function renderMarkdown(text) {
 // 用 WeakMap 存储工具调用数据，避免将 JSON 塞进 onclick 字符串（脆弱且有 XSS 风险）
 const _toolCallStore = new WeakMap();
 
+// ── 危险指令检测 ──────────────────────────────────────────────────────────────
+// 返回 { dangerous: true, reason: "..." } 或 { dangerous: false }
+function checkDangerous(toolCall) {
+    const name = toolCall.function?.name;
+    const args = toolCall.function?.arguments || {};
+
+    // 危险的 Shell 命令模式
+    const DANGEROUS_SHELL_PATTERNS = [
+        // 删除类
+        { re: /\brm\s+(-[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*r[a-zA-Z]*|-rf|-fr|--force|--recursive)/i, reason: "检测到强制删除命令 (rm -rf / rm -f)" },
+        { re: /\brm\b.*\*/, reason: "检测到通配符删除命令 (rm ... *)" },
+        { re: /\brmdir\b/i, reason: "检测到目录删除命令 (rmdir)" },
+        { re: /\bshred\b/i, reason: "检测到文件粉碎命令 (shred)" },
+        { re: /\btruncate\b/i, reason: "检测到文件截断命令 (truncate)" },
+        // 覆盖 / 清空
+        { re: /\bdd\b.*\bof=\/(dev|sys|proc)\b/i, reason: "检测到 dd 写入系统设备" },
+        { re: /\bdd\b.*\bif=\/dev\/zero\b/i, reason: "检测到 dd 零填充操作" },
+        { re: />\s*\/dev\/s[da-z]+\b/i, reason: "检测到向磁盘设备直接写入" },
+        // 格式化 / 磁盘操作
+        { re: /\bmkfs\b/i, reason: "检测到磁盘格式化命令 (mkfs)" },
+        { re: /\bfdisk\b/i, reason: "检测到磁盘分区命令 (fdisk)" },
+        { re: /\bparted\b/i, reason: "检测到磁盘分区命令 (parted)" },
+        // 权限 / 系统破坏
+        { re: /\bchmod\s+[0-7]*0+\s+\//, reason: "检测到对根路径下文件移除权限" },
+        { re: /\bchown\s+.*\s+\//, reason: "检测到对根路径下文件更改所有者" },
+        { re: /\bkill\s+(-9|-KILL|-SIGKILL)\s+1\b/i, reason: "检测到 kill -9 1 (杀死 init 进程)" },
+        // 网络 / 外发
+        { re: /\bcurl\b.*\|\s*(ba)?sh\b/i, reason: "检测到远程脚本下载执行 (curl | sh)" },
+        { re: /\bwget\b.*\|\s*(ba)?sh\b/i, reason: "检测到远程脚本下载执行 (wget | sh)" },
+        // 覆盖关键系统文件
+        { re: />\s*\/(etc\/(passwd|shadow|sudoers|crontab|hosts)|bin\/|sbin\/|usr\/bin\/)/i, reason: "检测到向系统关键文件写入" },
+        { re: /\b(sudo|su)\b.*\brm\b/i, reason: "检测到以超级用户权限删除文件" },
+    ];
+
+    // 危险的 Python 代码模式
+    const DANGEROUS_PYTHON_PATTERNS = [
+        { re: /\bos\.remove\b/i, reason: "检测到 os.remove() 文件删除调用" },
+        { re: /\bos\.unlink\b/i, reason: "检测到 os.unlink() 文件删除调用" },
+        { re: /\bshutil\.rmtree\b/i, reason: "检测到 shutil.rmtree() 目录删除调用" },
+        { re: /\bos\.rmdir\b/i, reason: "检测到 os.rmdir() 目录删除调用" },
+        { re: /subprocess.*['"](rm|shred|mkfs|fdisk)['"]/i, reason: "检测到通过 subprocess 执行危险命令" },
+        { re: /\bopen\(['"]\/(etc|bin|sbin|usr).*['"],\s*['"]w/i, reason: "检测到向系统关键路径写入文件" },
+    ];
+
+    if (name === "run_shell" || name === "bash") {
+        const cmd = args.command || args.cmd || "";
+        for (const { re, reason } of DANGEROUS_SHELL_PATTERNS) {
+            if (re.test(cmd)) return { dangerous: true, reason };
+        }
+    }
+
+    if (name === "run_python" || name === "python") {
+        const code = args.code || args.script || "";
+        for (const { re, reason } of DANGEROUS_PYTHON_PATTERNS) {
+            if (re.test(code)) return { dangerous: true, reason };
+        }
+    }
+
+    if (name === "write_file") {
+        const filename = args.filename || args.path || "";
+        // 禁止覆盖系统关键路径
+        if (/^\/(etc|bin|sbin|usr|boot|sys|dev)\//i.test(filename)) {
+            return { dangerous: true, reason: `检测到写入系统关键路径: ${filename}` };
+        }
+    }
+
+    return { dangerous: false };
+}
+
 // 智能滚动：仅当用户已在底部附近（100px 内）时才自动跟随
 function smartScroll() {
     const chat = document.getElementById("chatBox");
@@ -1209,25 +1336,81 @@ function renderToolApproval(bubble, toolCalls) {
             return;
         }
 
+        const dangerCheck = checkDangerous(tc);
+
         const block = document.createElement("div");
         block.className = "tool-block";
-        block.innerHTML = `
-            <div class="tool-title">${title}</div>
-            <pre><code class="lang-${lang}">${escapeHtml(content)}</code></pre>
-            <div class="tool-actions">
-                <button class="btn primary small approve-btn">✓ AUTHORIZE</button>
-                <button class="btn danger small deny-btn">✕ DENY</button>
-            </div>`;
 
-        // 用 WeakMap 将工具调用数据绑定到 DOM 按钮，安全且不污染 HTML 属性
-        const approveBtn = block.querySelector(".approve-btn");
-        const denyBtn = block.querySelector(".deny-btn");
-        _toolCallStore.set(approveBtn, toolCalls);
-        approveBtn.addEventListener("click", () => approveTool(approveBtn));
-        denyBtn.addEventListener("click", () => denyTool(denyBtn));
-
-        bubble.appendChild(block);
+        if (dangerCheck.dangerous) {
+            // 危险指令：展示被拒绝状态
+            block.style.borderColor = "rgba(255,51,102,0.5)";
+            block.innerHTML = `
+                <div class="tool-title">${title}</div>
+                <pre><code class="lang-${lang}">${escapeHtml(content)}</code></pre>
+                <div class="tool-actions">
+                    <span style="color:var(--danger);font-family:monospace;font-size:11px;text-shadow:var(--neon-glow-red)">
+                        ⛔ BLOCKED — ${escapeHtml(dangerCheck.reason)}
+                    </span>
+                </div>`;
+            bubble.appendChild(block);
+        } else {
+            // 安全指令：ReAct 模式下后端已自动执行，直接显示已执行状态
+            block.innerHTML = `
+                <div class="tool-title">${title}</div>
+                <pre><code class="lang-${lang}">${escapeHtml(content)}</code></pre>
+                <div class="tool-actions">
+                    <span style="color:var(--brand-2);font-family:monospace;font-size:11px;text-shadow:var(--neon-glow-green)">
+                        ⚡ REACT AUTO-EXECUTED
+                    </span>
+                </div>`;
+            bubble.appendChild(block);
+        }
     });
+}
+
+/**
+ * 渲染一个 ReAct 推理步骤摘要块，插入到当前 AI 气泡中。
+ * 对应后端 SSE 事件 "react_step"。
+ */
+function renderReactStep(bubble, { step, thought, action, action_input, observation }) {
+    const block = document.createElement("div");
+    block.className = "react-step";
+
+    const argsStr = typeof action_input === "object"
+        ? JSON.stringify(action_input, null, 1).replace(/\n/g, " ")
+        : String(action_input || "");
+
+    // 截断过长内容
+    const truncate = (s, n = 120) => s.length > n ? s.slice(0, n) + "…" : s;
+
+    block.innerHTML = `
+        <div class="react-step-header">
+            <span class="react-step-badge">STEP ${step}</span>
+            <span>REACT TRACE</span>
+        </div>
+        ${thought ? `
+        <div class="react-step-row">
+            <span class="react-step-label">Thought</span>
+            <span class="react-step-value">${escapeHtml(truncate(thought))}</span>
+        </div>` : ""}
+        ${action ? `
+        <div class="react-step-row">
+            <span class="react-step-label">Action</span>
+            <span class="react-step-value action">${escapeHtml(action)}</span>
+        </div>
+        <div class="react-step-row">
+            <span class="react-step-label">Input</span>
+            <span class="react-step-value">${escapeHtml(truncate(argsStr, 160))}</span>
+        </div>` : ""}
+        ${observation ? `
+        <div class="react-step-row" style="margin-top:4px">
+            <span class="react-step-label">Obs.</span>
+            <span></span>
+        </div>
+        <div class="react-obs">${escapeHtml(truncate(observation, 400))}</div>` : ""}
+    `;
+    bubble.appendChild(block);
+    smartScroll();
 }
 
 function renderSessions() {
@@ -1286,11 +1469,23 @@ async function abortGeneration() {
     }
 }
 
+/**
+ * handleStream — ReAct 模式下的 SSE 流处理函数
+ *
+ * 布局设计：
+ *   - react_step 事件：每步推理卡片直接插入聊天区（独立于气泡），
+ *     不进入 aiBubble，这样每步都是独立卡片。
+ *   - token 事件：Final Answer 文字渲染到 aiBubble（最终回答气泡）。
+ *   - tool_call 事件：工具信息附加在最近一个 react_step 卡片里（如有）。
+ */
 async function handleStream(url, bodyObject, aiBubble) {
     state.isStreaming = true;
     _currentAbortController = new AbortController();
     updateSendButton();
     let fullText = "";
+    // aiBubble 只用于 Final Answer；中间步骤插入聊天区独立节点
+    const chat = document.getElementById("chatBox");
+
     try {
         const res = await fetch(url, {
             method: "POST",
@@ -1305,34 +1500,50 @@ async function handleStream(url, bodyObject, aiBubble) {
         let buffer = "", currentEvent = "message", currentData = "";
 
         const processLine = (rawLine) => {
-            // 兼容 \r\n 和 \n 换行
             const line = rawLine.replace(/\r$/, "");
             if (!line) {
-                // 空行：触发事件派发
                 if (currentEvent === "token" && currentData) {
                     try {
                         const { text } = JSON.parse(currentData);
                         fullText += text || "";
+                        // Final Answer 渲染到主气泡
                         appendToken(aiBubble, fullText);
-                    } catch { /* JSON 解析失败，跳过该 token */ }
+                    } catch { /* skip */ }
+
+                } else if (currentEvent === "react_step" && currentData) {
+                    try {
+                        const stepData = JSON.parse(currentData);
+                        // 每步推理渲染为聊天区独立卡片（不挂在 aiBubble 上）
+                        const wrapper = document.createElement("div");
+                        wrapper.style.cssText = "margin: 6px 0 6px 10px;";
+                        renderReactStep(wrapper, stepData);
+                        // 插在 aiBubble 所在的 .msg 节点之前，保持时序
+                        const msgNode = aiBubble.closest(".msg");
+                        chat.insertBefore(wrapper, msgNode || null);
+                        smartScroll();
+                    } catch { /* skip */ }
+
                 } else if (currentEvent === "tool_call" && currentData) {
+                    // tool_call 仅展示，后端 ReAct 已自动执行
                     try {
                         const { tool_calls } = JSON.parse(currentData);
                         renderToolApproval(aiBubble, tool_calls);
-                    } catch { /* 解析失败，跳过 */ }
+                    } catch { /* skip */ }
+
                 } else if (currentEvent === "aborted") {
-                    // 后端确认中断，在气泡末尾加标记
                     const mdDiv = aiBubble.querySelector(".md-content");
                     if (mdDiv) {
                         mdDiv.innerHTML += `<p style="color:var(--text-dim);font-family:monospace;font-size:11px;margin-top:6px">// generation aborted</p>`;
                     }
+
                 } else if (currentEvent === "error" && currentData) {
                     try {
                         const { error } = JSON.parse(currentData);
                         const mdDiv = aiBubble.querySelector(".md-content");
                         if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[ERR] ${escapeHtml(error)}</p>`;
-                    } catch { /* 解析失败，跳过 */ }
+                    } catch { /* skip */ }
                 }
+
                 currentEvent = "message";
                 currentData = "";
                 return;
@@ -1348,15 +1559,13 @@ async function handleStream(url, bodyObject, aiBubble) {
         while (true) {
             const { done, value } = await reader.read();
             if (done) {
-                // flush 剩余 buffer
                 if (buffer) {
                     buffer.split("\n").forEach(processLine);
-                    processLine(""); // 触发最后一个事件（如无尾部空行）
+                    processLine("");
                 }
                 break;
             }
             buffer += decoder.decode(value, { stream: true });
-
             let idx;
             while ((idx = buffer.indexOf("\n")) >= 0) {
                 processLine(buffer.slice(0, idx));
@@ -1366,7 +1575,7 @@ async function handleStream(url, bodyObject, aiBubble) {
         }
     } catch (e) {
         if (e.name === "AbortError") {
-            // fetch 被前端主动中止，气泡已由 aborted 事件处理，此处静默
+            // 前端主动中止，静默
         } else {
             const mdDiv = aiBubble.querySelector(".md-content");
             if (mdDiv) mdDiv.innerHTML += `<p style="color:var(--danger)">[EXCEPTION] ${escapeHtml(e.message)}</p>`;

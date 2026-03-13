@@ -20,4 +20,7 @@ uvicorn app:app --reload
 - [x] 接入QQbot
 
 ### 0312
-- [x] 前端/qqbot中断生成逻辑，qqbot发起新对话的逻辑/new
+- [x] 前端/qqbot中断生成逻辑/stop，qqbot发起新对话的逻辑/new
+
+### 0313
+- [x] 升级为ReAct模式 

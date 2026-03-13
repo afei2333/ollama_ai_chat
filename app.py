@@ -123,19 +123,38 @@ def get_session_dep(session_id: str) -> SessionState:
 
 
 def _sse_generator(generator, session_id: str, abort_event: threading.Event):
-    """将内部事件流包装成 SSE 格式字节流，支持通过 abort_event 中断。"""
+    """
+    将内部事件流包装成 SSE 格式字节流，支持通过 abort_event 中断。
+
+    支持的事件类型（ReAct 模式）：
+      - text / token : 模型文字输出 → SSE event: token
+      - react_step   : ReAct 推理步骤摘要 → SSE event: react_step
+      - tool_call    : 工具调用信息（仅展示）→ SSE event: tool_call
+    """
     try:
         for item in generator:
-            # 每帧检查中断信号
             if abort_event.is_set():
                 log.info("SSE 流被中断 session=%s", session_id[:8])
                 yield f"event: aborted\ndata: {{}}\n\n"
                 return
 
-            if item["type"] == "text":
+            event_type = item.get("type")
+
+            if event_type in ("text", "token"):
                 payload = json.dumps({"text": item["content"]}, ensure_ascii=False)
                 yield f"event: token\ndata: {payload}\n\n"
-            elif item["type"] == "tool_call":
+
+            elif event_type == "react_step":
+                payload = json.dumps({
+                    "step":         item.get("step"),
+                    "thought":      item.get("thought", ""),
+                    "action":       item.get("action", ""),
+                    "action_input": item.get("action_input", {}),
+                    "observation":  item.get("observation", ""),
+                }, ensure_ascii=False)
+                yield f"event: react_step\ndata: {payload}\n\n"
+
+            elif event_type == "tool_call":
                 payload = json.dumps({"tool_calls": item["tool_calls"]}, ensure_ascii=False)
                 yield f"event: tool_call\ndata: {payload}\n\n"
 
@@ -147,7 +166,6 @@ def _sse_generator(generator, session_id: str, abort_event: threading.Event):
         error_payload = json.dumps({"error": str(err)}, ensure_ascii=False)
         yield f"event: error\ndata: {error_payload}\n\n"
     finally:
-        # 流结束（正常/异常/中断）都清理信号
         _abort_events.pop(session_id, None)
 
 

@@ -1,14 +1,14 @@
 """
-chat_manager.py — 对话管理核心
-  ChatManager 是顶层业务协调器，整合 KnowledgeBase / SessionStore / ToolExecutor。
-  自身不包含 I/O 或持久化细节，通过依赖注入便于单元测试。
+chat_manager.py — 对话管理核心（ReAct 模式）
 
-变更说明：
-  - 不再从 storage 导入私有函数 _now_iso，改用公开的 now_iso
-  - _stream_tokens_and_calls 修复 Ollama 流 chunk 解析：chunk 是对象而非 dict，
-    通过 getattr 兼容对象和 dict 两种形态
-  - _is_json_error 提取为模块级常量匹配，避免每次调用创建字符串
-  - execute_and_stream 改为先批量执行再一次性构建消息，减少 _build_model_messages 调用
+变更说明（ReAct 改造）：
+  - stream_chat 新增 ReAct 自动循环：模型输出工具调用后，自动执行工具、
+    将 Observation 追加上下文、再次调用模型，直到模型输出 Final Answer
+    或达到 REACT_MAX_STEPS 上限为止。前端无需再手动确认工具执行。
+  - 新增 _react_loop 私有方法，封装 Thought→Action→Observation 循环逻辑。
+  - execute_and_stream 保留（供外部直接喂入工具结果的场景兼容使用）。
+  - _build_model_messages 保持不变，ReAct 上下文通过 session.messages 自然积累。
+  - 新增 SSE 事件类型 "react_step"，前端可据此展示每步推理过程。
 """
 
 from __future__ import annotations
@@ -28,8 +28,13 @@ from config import (
     LLM_MAX_RETRIES,
     LLM_NUM_CTX,
     LLM_NUM_PREDICT,
+    REACT_MAX_STEPS,
+    REACT_STOP_TOKEN,
     TOOL_DEFINITIONS,
+    format_observation,
+    is_final_answer,
     is_google_model,
+    parse_react_step,
 )
 from google_client import stream_google, serialize_google_content, deserialize_google_content
 from models import SessionState
@@ -165,9 +170,6 @@ class ChatManager:
         消费 Ollama 原始流：
           - 逐 token yield {"type": "text", "content": ...}
           - 流结束后若有工具调用，统一 yield {"type": "tool_call", ...}
-
-        注意：Ollama Python SDK 返回的 chunk 是对象（非 dict），
-        使用 _get_attr 兼容对象和 dict 两种形态。
         """
         full_content = ""
         tool_calls: List[Dict[str, Any]] = []
@@ -175,7 +177,6 @@ class ChatManager:
         for chunk in stream:
             msg = _get_attr(chunk, "message", {})
 
-            # 原生 tool_calls 字段（对象或 list）
             raw_tcs = _get_attr(msg, "tool_calls") or []
             for raw_tc in raw_tcs:
                 normalized = normalize_tool_call(raw_tc)
@@ -201,29 +202,27 @@ class ChatManager:
     # -----------------------------------------------------------------------
 
     def _stream_internal(
-        self, session: SessionState, model_messages: List[Dict[str, Any]]
+        self, session: SessionState, model_messages: List[Dict[str, Any]],
+        persist: bool = True,
     ) -> Generator[Dict[str, Any], None, None]:
-        """核心流式请求，自动根据模型名路由到 Ollama 或 Google Gemini。"""
+        """核心流式请求，自动根据模型名路由到 Ollama 或 Google Gemini。
+        persist=False 时跳过自动持久化，由调用方自行管理消息历史（ReAct 循环专用）。
+        """
         self.last_used_model = session.model
 
-        # ── 路由到 Google Gemini ─────────────────────────────────────────────
         if is_google_model(session.model):
-            yield from self._stream_google_internal(session, model_messages)
+            yield from self._stream_google_internal(session, model_messages, persist=persist)
             return
 
-        # ── 路由到 Ollama（原有逻辑）────────────────────────────────────────
-        yield from self._stream_ollama_internal(session, model_messages)
+        yield from self._stream_ollama_internal(session, model_messages, persist=persist)
 
     def _stream_google_internal(
-        self, session: SessionState, model_messages: List[Dict[str, Any]]
+        self, session: SessionState, model_messages: List[Dict[str, Any]],
+        persist: bool = True,
     ) -> Generator[Dict[str, Any], None, None]:
-        """调用 Google Gemini API 流式推理。"""
-        llm_logger.debug(
-            "── GOOGLE LLM REQUEST ── session=%s model=%s messages=%d",
-            session.id[:8], session.model, len(model_messages),
-        )
+        """调用 Google Gemini 流式推理。"""
         logger.info(
-            "开始 Google 请求 session=%s model=%s 消息数=%d",
+            "开始 Google LLM 请求 session=%s model=%s 消息数=%d",
             session.id[:8], session.model, len(model_messages),
         )
         try:
@@ -241,7 +240,8 @@ class ChatManager:
                     google_raw_content = event.get("_google_raw_content")
 
             self._log_llm_response(session, full_content, final_tool_calls)
-            self._persist_response(session, full_content, final_tool_calls, google_raw_content)
+            if persist:
+                self._persist_response(session, full_content, final_tool_calls, google_raw_content)
 
             if final_tool_calls:
                 yield {"type": "tool_call", "tool_calls": final_tool_calls}
@@ -252,7 +252,8 @@ class ChatManager:
             raise
 
     def _stream_ollama_internal(
-        self, session: SessionState, model_messages: List[Dict[str, Any]]
+        self, session: SessionState, model_messages: List[Dict[str, Any]],
+        persist: bool = True,
     ) -> Generator[Dict[str, Any], None, None]:
         """调用 Ollama 流式推理，支持 JSON 解析失败自动重试。"""
         llm_logger.debug(
@@ -287,12 +288,13 @@ class ChatManager:
                         full_content     = event.get("full_content", full_content)
 
                 self._log_llm_response(session, full_content, final_tool_calls)
-                self._persist_response(session, full_content, final_tool_calls)
+                if persist:
+                    self._persist_response(session, full_content, final_tool_calls)
 
                 if final_tool_calls:
                     yield {"type": "tool_call", "tool_calls": final_tool_calls}
 
-                return  # 成功完成，跳出重试循环
+                return
 
             except Exception as exc:
                 if self._is_json_error(exc) and attempt < LLM_MAX_RETRIES:
@@ -305,6 +307,116 @@ class ChatManager:
                 logger.error("LLM 请求异常 session=%s: %s", session.id[:8], exc, exc_info=True)
                 self._store.pop_last_user_message(session)
                 raise
+
+    # -----------------------------------------------------------------------
+    # ReAct 核心循环
+    # -----------------------------------------------------------------------
+
+    def _react_loop(
+        self,
+        session: SessionState,
+        rag_context: Optional[str] = None,
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        ReAct 自动循环：Thought → Action → Observation → ... → Final Answer
+
+        消息持久化规则（由本方法统一管理，_stream_internal 用 persist=False）：
+          - 中间步骤：assistant(Thought+Action文本) + tool(工具输出)
+          - 最终回答：assistant(Final Answer)
+          - 不写入任何 user 角色的 Observation，避免历史记录混乱
+        """
+        for step in range(1, REACT_MAX_STEPS + 1):
+            logger.info("ReAct step=%d session=%s", step, session.id[:8])
+
+            model_messages = self._build_model_messages(session, rag_context=rag_context)
+            rag_context = None  # RAG 仅第一步注入
+
+            # ── 调用 LLM，persist=False 避免自动写入消息历史 ────────────────
+            full_text = ""
+            native_tool_calls: List[Dict[str, Any]] = []
+
+            for event in self._stream_internal(session, model_messages, persist=False):
+                if event["type"] == "text":
+                    full_text += event["content"]
+                elif event["type"] == "tool_call":
+                    native_tool_calls = event["tool_calls"]
+                    full_text = event.get("full_content", full_text)
+
+            logger.debug(
+                "ReAct step=%d raw_output=%r session=%s",
+                step, full_text[:200], session.id[:8],
+            )
+
+            parsed = parse_react_step(full_text)
+
+            # ── 检测 Final Answer ────────────────────────────────────────────
+            final_answer = parsed.get("final_answer") or (
+                full_text.split("Final Answer:", 1)[1].strip()
+                if "Final Answer:" in full_text else None
+            )
+            if final_answer:
+                logger.info("ReAct 完成 step=%d session=%s", step, session.id[:8])
+                # 持久化：仅写一条 assistant 最终回答
+                self._store.append_message(
+                    session, {"role": "assistant", "content": final_answer}
+                )
+                yield {"type": "token", "content": final_answer}
+                return
+
+            # ── 确定工具调用 ─────────────────────────────────────────────────
+            action       = parsed.get("action", "")
+            action_input = parsed.get("action_input", {})
+
+            if not action and native_tool_calls:
+                tc           = native_tool_calls[0]
+                func         = tc.get("function", {})
+                action       = func.get("name", "")
+                action_input = func.get("arguments", {})
+
+            if not action:
+                # 没有 Action 也没有 Final Answer，原样输出并结束
+                logger.warning(
+                    "ReAct step=%d 未检测到 Action，终止 session=%s",
+                    step, session.id[:8],
+                )
+                if full_text:
+                    self._store.append_message(
+                        session, {"role": "assistant", "content": full_text}
+                    )
+                    yield {"type": "token", "content": full_text}
+                return
+
+            # ── 执行工具 ─────────────────────────────────────────────────────
+            logger.info(
+                "ReAct 执行工具 step=%d tool=%s session=%s",
+                step, action, session.id[:8],
+            )
+            output = self._executor.execute(action, action_input)
+
+            # 持久化：assistant(本步推理文本) + tool(工具输出)
+            # 不写 user 角色 Observation，避免历史记录出现假冒用户消息
+            self._store.append_message(
+                session, {"role": "assistant", "content": full_text}
+            )
+            self._store.append_message(
+                session, {"role": "tool", "name": action, "content": output}
+            )
+
+            yield {
+                "type": "react_step",
+                "step": step,
+                "thought": parsed.get("thought", ""),
+                "action": action,
+                "action_input": action_input,
+                "observation": output,
+            }
+
+        # 达到最大步数
+        logger.warning("ReAct 达到最大步数 %d session=%s", REACT_MAX_STEPS, session.id[:8])
+        yield {
+            "type": "token",
+            "content": f"[系统提示] 已达到最大推理步数（{REACT_MAX_STEPS} 步），请尝试简化问题。",
+        }
 
     # -----------------------------------------------------------------------
     # 私有辅助
@@ -352,7 +464,6 @@ class ChatManager:
                 "content": full_content,
                 "tool_calls": tool_calls,
             }
-            # 序列化 Google 原始 Content（含 thought_signature）后存入，确保 JSON 可序列化
             if google_raw_content is not None:
                 serialized = serialize_google_content(google_raw_content)
                 if serialized is not None:
@@ -372,6 +483,13 @@ class ChatManager:
         top_k: int = 3,
         use_rag: bool = True,
     ) -> Generator[Dict[str, Any], None, None]:
+        """
+        主对话入口。
+
+        ReAct 模式下，此方法会自动驱动 Thought→Action→Observation 循环，
+        直到模型输出 Final Answer 或达到最大步数。
+        前端只需处理 token / react_step / done / error 四种 SSE 事件。
+        """
         logger.info(
             "用户消息 session=%s use_rag=%s 长度=%d",
             session.id[:8], use_rag, len(user_message),
@@ -380,14 +498,18 @@ class ChatManager:
         if rag_context:
             logger.debug("RAG 命中 session=%s top_k=%d", session.id[:8], top_k)
 
+        # 将用户消息追加到历史，ReAct 循环从此开始
         self._store.append_message(session, {"role": "user", "content": user_message})
-        model_messages = self._build_model_messages(session, rag_context=rag_context)
-        yield from self._stream_internal(session, model_messages)
+        yield from self._react_loop(session, rag_context=rag_context)
 
     def execute_and_stream(
         self, session: SessionState, tool_calls: List[Dict[str, Any]]
     ) -> Generator[Dict[str, Any], None, None]:
-        """执行经用户确认的工具调用，并将结果喂回模型继续生成。"""
+        """
+        兼容接口：直接喂入工具结果后继续生成。
+        ReAct 模式下通常不需要手动调用此方法（循环已自动执行工具），
+        保留供特殊场景或测试使用。
+        """
         for tc in tool_calls:
             func      = tc.get("function", {})
             func_name = func.get("name", "")
@@ -407,7 +529,6 @@ class ChatManager:
     def list_models(self) -> List[str]:
         models: List[str] = []
 
-        # Ollama 本地模型
         try:
             resp = ollama.list()
             models_raw = _get_attr(resp, "models", []) or []
@@ -422,7 +543,6 @@ class ChatManager:
         if not models:
             models.append(self.default_model)
 
-        # Google 模型（仅当配置了 API Key 时加入）
         if GOOGLE_API_KEY:
             models.extend(GOOGLE_MODELS)
 
