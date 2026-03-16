@@ -14,6 +14,7 @@ import json
 import threading
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict
+from http.server import HTTPServer as _HTTPServer
 
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
@@ -25,6 +26,35 @@ from config import GOOGLE_API_KEY
 from logger import get_logger
 
 log = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# 笔记服务（server.py）集成
+# ---------------------------------------------------------------------------
+from server import Handler as _NoteHandler, DATA_PATH as _NOTE_DATA_PATH, save_notes as _save_notes
+
+_NOTE_PORT   = 8765
+_note_server: "_HTTPServer | None" = None
+
+
+def _start_note_server() -> None:
+    """在后台守护线程中启动笔记 HTTP 服务。端口已被占用时打印警告并跳过。"""
+    global _note_server
+    if not _NOTE_DATA_PATH.exists():
+        _save_notes({})
+    try:
+        _note_server = _HTTPServer(("127.0.0.1", _NOTE_PORT), _NoteHandler)
+        log.info("笔记服务已启动 → http://localhost:%d", _NOTE_PORT)
+        _note_server.serve_forever()
+    except OSError as exc:
+        log.warning("笔记服务启动失败（端口 %d 可能已被占用）: %s", _NOTE_PORT, exc)
+
+
+def _stop_note_server() -> None:
+    global _note_server
+    if _note_server:
+        _note_server.shutdown()
+        _note_server = None
+        log.info("笔记服务已停止")
 
 # ---------------------------------------------------------------------------
 # 应用初始化
@@ -42,9 +72,16 @@ async def lifespan(app: FastAPI):
     log.info("=== Local AI Assistant 启动 ===")
     log.info("Tavily 联网搜索: %s", "已启用" if TAVILY_API_KEY else "未配置（缺少 TAVILY_API_KEY）")
     log.info("Google Gemini: %s", "已启用" if GOOGLE_API_KEY else "未配置（缺少 GOOGLE_API_KEY）")
+
+    # 后台守护线程启动笔记服务，uvicorn --reload 重载时也会重新启动
+    note_thread = threading.Thread(target=_start_note_server, daemon=True, name="note-server")
+    note_thread.start()
+
     yield
+
     log.info("=== 服务关闭，卸载模型 ===")
     manager.unload_model()
+    _stop_note_server()
 
 
 app = FastAPI(title="Local AI Assistant", lifespan=lifespan)

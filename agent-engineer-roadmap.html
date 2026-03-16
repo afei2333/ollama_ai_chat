@@ -354,9 +354,33 @@
 
   /* ── Footer ── */
   .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #333; letter-spacing: .1em; }
+
+  /* ── Server Status Bar ── */
+  .sv-bar {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    padding: 7px 20px;
+    background: rgba(10,10,15,0.94);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    backdrop-filter: blur(8px);
+    flex-wrap: wrap;
+  }
+  #sv-indicator { font-size: 12px; font-family: inherit; letter-spacing: .04em; transition: color .3s; }
+  #sv-error-tip {
+    display: none;
+    font-size: 11px; color: #FF6B6B;
+    background: rgba(255,107,107,0.07);
+    border: 1px solid rgba(255,107,107,0.22);
+    border-radius: 6px; padding: 3px 12px;
+  }
+  #sv-error-tip code { color: #FCD34D; font-family: 'Courier New', monospace; }
 </style>
 </head>
 <body>
+<div class="sv-bar">
+  <span id="sv-indicator" style="color:#888">⏳ 连接服务中…</span>
+  <span id="sv-error-tip">服务未启动，请先运行 <code>python server.py</code>（笔记已暂存浏览器，启动服务后自动同步）</span>
+</div>
 <div class="wrap">
   <div class="header">
     <div class="badge">LEARNING ROADMAP · 2025–2026</div>
@@ -460,9 +484,65 @@ const tips = [
   { icon: "🤝", text: "加入中文 AI 工程师社区，跟人交流会加速 10 倍" },
 ];
 
-// ── localStorage helpers ──
-function lsGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
-function lsSet(key, val) { try { localStorage.setItem(key, val); } catch {} }
+// ══════════════════════════════════════════════════
+// ── 本地服务存储层 ──
+// 通过 http://localhost:8765/api/notes 读写 notes.json
+// localStorage 仅作内存缓存，保证 UI 响应速度
+// ══════════════════════════════════════════════════
+const API_URL = 'http://localhost:8765/api/notes';
+let _cache = {};
+let _saveTimer = null;
+let _serverOK = false;
+
+function setIndicator(state) {
+  const el = document.getElementById('sv-indicator');
+  const tip = document.getElementById('sv-error-tip');
+  if (!el) return;
+  const map = {
+    connecting: ['⏳ 连接服务中…',    '#888'],
+    ok:         ['🟢 自动保存中',      '#00FFB2'],
+    saving:     ['💾 保存中…',         '#FCD34D'],
+    saved:      ['✅ 已保存到文件',     '#00FFB2'],
+    error:      ['🔴 未连接到服务',     '#FF6B6B'],
+  };
+  const [text, color] = map[state] || map.error;
+  el.textContent = text;
+  el.style.color = color;
+  if (tip) tip.style.display = (state === 'error') ? 'inline' : 'none';
+}
+
+async function flushToServer() {
+  if (!_serverOK) return;
+  setIndicator('saving');
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_cache),
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    setIndicator('saved');
+    setTimeout(() => setIndicator('ok'), 1500);
+  } catch { setIndicator('error'); }
+}
+
+function scheduleSave() {
+  if (!_serverOK) return;
+  setIndicator('saving');
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(flushToServer, 800);
+}
+
+function lsGet(key) {
+  if (key in _cache) return _cache[key];
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function lsSet(key, val) {
+  _cache[key] = val;
+  try { localStorage.setItem(key, val); } catch {}
+  scheduleSave();
+}
 
 // ── Lightweight Markdown renderer ──
 function renderMD(md) {
@@ -575,7 +655,9 @@ function lsSetStep(phaseId, stepIdx, val) { lsSet('phase-' + phaseId + '-step-' 
 function lsGetNote(phaseId) { return lsGet('note-' + phaseId) || ''; }
 function lsSetNote(phaseId, val) { lsSet('note-' + phaseId, val); }
 
-phases.forEach(function(p) {
+function renderAll() {
+  tl.innerHTML = '';
+  phases.forEach(function(p) {
   const row = document.createElement('div');
   row.className = 'phase-row';
   row.style.setProperty('--c', p.color);
@@ -794,10 +876,29 @@ phases.forEach(function(p) {
     var stepSaveTimer;
     function saveStepNote() {
       clearTimeout(stepSaveTimer);
-      stepSaveTimer = setTimeout(function() {
+      stepSaveTimer = setTimeout(async function() {
         lsSetStepNote(sid, ta.value);
         btn.classList.toggle('has-note', ta.value.trim().length > 0);
-        savedH.textContent = '已保存 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+        if (_serverOK) {
+          try {
+            const res = await fetch(API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(_cache),
+              signal: AbortSignal.timeout(3000),
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            clearTimeout(_saveTimer);
+            savedH.textContent = '✅ 已保存到文件 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+            setIndicator('saved');
+            setTimeout(() => setIndicator('ok'), 1500);
+          } catch {
+            savedH.textContent = '🔴 保存失败，请检查服务';
+            setIndicator('error');
+          }
+        } else {
+          savedH.textContent = '⚠️ 仅缓存到本地（服务未连接）';
+        }
         savedH.classList.add('flash');
         setTimeout(function() { savedH.classList.remove('flash'); }, 1200);
       }, 600);
@@ -902,10 +1003,29 @@ phases.forEach(function(p) {
   let saveTimer;
   function saveNote() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function() {
+    saveTimer = setTimeout(async function() {
       lsSetNote(p.id, textarea.value);
       noteToggleBtn.classList.toggle('has-note', textarea.value.trim().length > 0);
-      savedHint.textContent = '已保存 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+      if (_serverOK) {
+        try {
+          const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(_cache),
+            signal: AbortSignal.timeout(3000),
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          clearTimeout(_saveTimer);
+          savedHint.textContent = '✅ 已保存到文件 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+          setIndicator('saved');
+          setTimeout(() => setIndicator('ok'), 1500);
+        } catch {
+          savedHint.textContent = '🔴 保存失败，请检查服务';
+          setIndicator('error');
+        }
+      } else {
+        savedHint.textContent = '⚠️ 仅缓存到本地（服务未连接）';
+      }
       savedHint.classList.add('flash');
       setTimeout(function() { savedHint.classList.remove('flash'); }, 1200);
     }, 600);
@@ -953,15 +1073,36 @@ phases.forEach(function(p) {
 
   tl.appendChild(row);
   refreshCompletion();
-});
+  }); // end phases.forEach
 
-// ── Tips ──
-const tg = document.getElementById('tips-grid');
-tips.forEach(function(t) {
-  const el = document.createElement('div');
-  el.className = 'tip';
-  el.innerHTML = '<span class="tip-icon">' + t.icon + '</span><span class="tip-text">' + t.text + '</span>';
-  tg.appendChild(el);
+  // ── Tips ──
+  const tg = document.getElementById('tips-grid');
+  tg.innerHTML = '';
+  tips.forEach(function(t) {
+    const el = document.createElement('div');
+    el.className = 'tip';
+    el.innerHTML = '<span class="tip-icon">' + t.icon + '</span><span class="tip-text">' + t.text + '</span>';
+    tg.appendChild(el);
+  });
+} // end renderAll()
+
+// ── 启动：拉取服务端数据，再渲染页面 ──
+document.addEventListener('DOMContentLoaded', async function () {
+  setIndicator('connecting');
+  try {
+    const res  = await fetch(API_URL, { signal: AbortSignal.timeout(2000) });
+    const data = await res.json();
+    _cache = data || {};
+    // 同步到 localStorage 作为缓存
+    Object.entries(_cache).forEach(([k, v]) => { try { localStorage.setItem(k, v); } catch {} });
+    _serverOK = true;
+    setIndicator('ok');
+  } catch {
+    // 服务未启动：降级读 localStorage
+    _serverOK = false;
+    setIndicator('error');
+  }
+  renderAll();
 });
 </script>
 </body>
