@@ -21,16 +21,17 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from ollama_client import ChatManager, SessionState, TAVILY_API_KEY
-from config import GOOGLE_API_KEY
-from logger import get_logger
+from core.chat import ChatManager
+from core.models import SessionState
+from config import TAVILY_API_KEY, GOOGLE_API_KEY
+from core.logger import get_logger
 
 log = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # 笔记服务（server.py）集成
 # ---------------------------------------------------------------------------
-from server import Handler as _NoteHandler, DATA_PATH as _NOTE_DATA_PATH, save_notes as _save_notes
+from notes.server import Handler as _NoteHandler, DATA_PATH as _NOTE_DATA_PATH, save_notes as _save_notes
 
 _NOTE_PORT   = 8765
 _note_server: "_HTTPServer | None" = None

@@ -1,5 +1,5 @@
 """
-google_client.py — Google Gemini API 流式对话适配器
+llm/google.py — Google Gemini API 流式对话适配器
 
 代理必须在 import google 之前通过 os.environ 设置，SDK 初始化时读取。
 """
@@ -10,7 +10,7 @@ import os
 
 # !! 代理必须在 import google 之前设置 !!
 from config import GOOGLE_API_KEY, GOOGLE_HTTP_PROXY, TOOL_DEFINITIONS
-from logger import get_logger, get_llm_logger
+from core.logger import get_logger, get_llm_logger
 
 logger     = get_logger(__name__)
 llm_logger = get_llm_logger()
@@ -88,7 +88,6 @@ def _ollama_messages_to_gemini(
 
         elif role == "assistant":
             # 优先使用保存的原始 Content（含 thought_signature），避免 400 INVALID_ARGUMENT
-            # 存储的是 dict（JSON 序列化后），需要先反序列化为 Content 对象
             raw_data = msg.get("_google_raw_content")
             raw = deserialize_google_content(raw_data) if raw_data is not None else None
             if raw is not None:
@@ -133,12 +132,10 @@ def serialize_google_content(content_obj: Any) -> Optional[Dict]:
     if content_obj is None or not _GENAI_AVAILABLE:
         return None
     try:
-        # SDK 提供 _to_dict / model_dump 等方法
         if hasattr(content_obj, "model_dump"):
             return content_obj.model_dump(exclude_none=True)
         if hasattr(content_obj, "_to_dict"):
             return content_obj._to_dict()
-        # 兜底：手动序列化 parts
         parts_data = []
         for part in (content_obj.parts or []):
             p: Dict[str, Any] = {}
@@ -147,7 +144,6 @@ def serialize_google_content(content_obj: Any) -> Optional[Dict]:
             if hasattr(part, "thought") and part.thought:
                 p["thought"] = part.thought
             if hasattr(part, "thought_signature") and part.thought_signature:
-                # thought_signature 是 bytes，转 base64 存储
                 import base64
                 sig = part.thought_signature
                 p["thought_signature"] = base64.b64encode(sig).decode() if isinstance(sig, bytes) else sig
@@ -156,7 +152,7 @@ def serialize_google_content(content_obj: Any) -> Optional[Dict]:
                 p["function_call"] = {"name": fc.name, "args": dict(fc.args or {})}
             parts_data.append(p)
         return {"role": content_obj.role, "parts": parts_data, "_raw_serialized": True}
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -166,9 +162,7 @@ def deserialize_google_content(data: Optional[Dict]) -> Optional[Any]:
         return None
     try:
         if not data.get("_raw_serialized"):
-            # 使用 SDK 标准反序列化
             return gtypes.Content.model_validate(data)
-        # 手动构建 parts
         import base64
         parts = []
         for p in data.get("parts", []):
@@ -229,7 +223,6 @@ def stream_google(
 
         full_text   = ""
         tool_calls: List[Dict[str, Any]] = []
-        # 保存完整的原始 Content 对象（含 thought_signature），用于回传给 API
         raw_model_content: Optional[Any] = None
 
         response_stream = client.models.generate_content_stream(
@@ -238,7 +231,6 @@ def stream_google(
             config=config,
         )
 
-        # 流式收集所有 chunk，合并为最终 Content
         all_parts: List[Any] = []
         for chunk in response_stream:
             try:
@@ -266,7 +258,6 @@ def stream_google(
             except Exception:
                 pass
 
-        # 构建完整的原始 Content，保留 thought_signature 等隐藏字段
         if all_parts:
             raw_model_content = gtypes.Content(role="model", parts=all_parts)
 
@@ -276,7 +267,7 @@ def stream_google(
                 "type": "tool_call",
                 "tool_calls": tool_calls,
                 "full_content": full_text,
-                "_google_raw_content": raw_model_content,  # 原始 Content，含 thought_signature
+                "_google_raw_content": raw_model_content,
             }
         else:
             logger.info("Google Gemini 回复完成 字符数=%d", len(full_text))

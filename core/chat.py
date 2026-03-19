@@ -1,14 +1,5 @@
 """
-chat_manager.py — 对话管理核心（ReAct 模式）
-
-变更说明（ReAct 改造）：
-  - stream_chat 新增 ReAct 自动循环：模型输出工具调用后，自动执行工具、
-    将 Observation 追加上下文、再次调用模型，直到模型输出 Final Answer
-    或达到 REACT_MAX_STEPS 上限为止。前端无需再手动确认工具执行。
-  - 新增 _react_loop 私有方法，封装 Thought→Action→Observation 循环逻辑。
-  - execute_and_stream 保留（供外部直接喂入工具结果的场景兼容使用）。
-  - _build_model_messages 保持不变，ReAct 上下文通过 session.messages 自然积累。
-  - 新增 SSE 事件类型 "react_step"，前端可据此展示每步推理过程。
+core/chat.py — 对话管理核心（ReAct 模式）
 """
 
 from __future__ import annotations
@@ -36,12 +27,12 @@ from config import (
     is_google_model,
     parse_react_step,
 )
-from google_client import stream_google, serialize_google_content, deserialize_google_content
-from models import SessionState
-from storage import KnowledgeBase, SessionStore, now_iso
-from tool.tool_parser import extract_tool_calls_from_text, normalize_tool_call
-from tool.tools import ToolExecutor
-from logger import get_logger, get_llm_logger
+from llm.google import stream_google, serialize_google_content, deserialize_google_content
+from .models import SessionState
+from .storage import KnowledgeBase, SessionStore, now_iso
+from tools.parser import extract_tool_calls_from_text, normalize_tool_call
+from tools.executor import ToolExecutor
+from .logger import get_logger, get_llm_logger
 
 logger     = get_logger(__name__)
 llm_logger = get_llm_logger()
@@ -394,7 +385,6 @@ class ChatManager:
             output = self._executor.execute(action, action_input)
 
             # 持久化：assistant(本步推理文本) + tool(工具输出)
-            # 不写 user 角色 Observation，避免历史记录出现假冒用户消息
             self._store.append_message(
                 session, {"role": "assistant", "content": full_text}
             )

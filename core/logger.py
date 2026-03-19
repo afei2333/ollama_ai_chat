@@ -12,7 +12,7 @@ logger.py — 统一日志配置模块
   └── llm.log        # LLM 原始输入输出（按天滚动）
 
 使用方式：
-  from logger import get_logger, get_llm_logger
+  from core.logger import get_logger, get_llm_logger
   log     = get_logger(__name__)
   llm_log = get_llm_logger()
 """

@@ -1,5 +1,5 @@
 """
-qqbot_client.py — 腾讯 QQ 机器人官方 API 客户端
+bot/client.py — 腾讯 QQ 机器人官方 API 客户端
 
 直接对接腾讯开放平台，无需任何第三方框架。
 实现了完整的 WebSocket 长连接生命周期管理：
@@ -27,7 +27,7 @@ from typing import Any, Callable, Coroutine, Dict, Optional
 
 import aiohttp
 
-from logger import get_logger
+from core.logger import get_logger
 
 log = get_logger(__name__)
 
@@ -64,7 +64,7 @@ class QQBotClient:
         self.sandbox    = sandbox
 
         self._token: str           = ""
-        self._token_expire: float  = 0.0   # unix timestamp，token 过期时刻
+        self._token_expire: float  = 0.0
         self._session_id: str      = ""
         self._last_seq: int        = 0
         self._ws_url: str          = ""
@@ -91,15 +91,11 @@ class QQBotClient:
         msg_id: str,
         msg_seq: int = 1,
     ) -> Dict[str, Any]:
-        """
-        回复用户私聊（C2C）消息。
-        必须在收到用户消息后的 5 分钟内调用（被动回复），
-        否则需要申请主动消息权限。
-        """
+        """回复用户私聊（C2C）消息。"""
         url  = f"{_API_BASE}/v2/users/{openid}/messages"
         body = {
             "content":  content,
-            "msg_type": 0,          # 0=文本
+            "msg_type": 0,
             "msg_id":   msg_id,
             "msg_seq":  msg_seq,
         }
@@ -112,10 +108,7 @@ class QQBotClient:
         msg_id: str,
         msg_seq: int = 1,
     ) -> Dict[str, Any]:
-        """
-        回复群消息（被动回复）。
-        必须在收到群消息后的 5 分钟内调用。
-        """
+        """回复群消息（被动回复）。"""
         url  = f"{_API_BASE}/v2/groups/{group_openid}/messages"
         body = {
             "content":  content,
@@ -144,7 +137,6 @@ class QQBotClient:
     # -----------------------------------------------------------------------
 
     async def _ensure_token(self) -> str:
-        """确保 access_token 有效（不足 60 秒过期时自动刷新）。"""
         if time.time() < self._token_expire - 60:
             return self._token
 
@@ -195,7 +187,6 @@ class QQBotClient:
     # -----------------------------------------------------------------------
 
     async def _get_gateway(self) -> str:
-        """获取 WSS 网关地址。"""
         if self.sandbox:
             return "wss://sandbox.api.sgroup.qq.com/websocket"
         data = await self._get(_GATEWAY_URL)
@@ -206,7 +197,6 @@ class QQBotClient:
         return url
 
     async def _connect_and_listen(self) -> None:
-        """建立 WebSocket 连接并进入事件监听循环。"""
         await self._ensure_token()
         ws_url = await self._get_gateway()
 
@@ -229,9 +219,8 @@ class QQBotClient:
                 self._hb_task = None
 
     async def _handle_ws_message(self, payload: Dict[str, Any]) -> None:
-        """分发 WebSocket 消息到对应处理函数。"""
         op = payload.get("op")
-        s  = payload.get("s")   # 事件序号
+        s  = payload.get("s")
 
         if s is not None:
             self._last_seq = s
@@ -260,7 +249,6 @@ class QQBotClient:
             log.debug("心跳 ACK")
 
     async def _identify_or_resume(self) -> None:
-        """首次连接发 IDENTIFY；断线重连且有 session_id 时发 RESUME。"""
         if self._session_id:
             log.info("尝试 Resume session=%s seq=%d", self._session_id, self._last_seq)
             payload = {
@@ -285,7 +273,6 @@ class QQBotClient:
         await self._ws.send_str(json.dumps(payload))
 
     async def _heartbeat_loop(self, interval: float) -> None:
-        """按照服务端指定的间隔周期发送心跳。"""
         try:
             while True:
                 await asyncio.sleep(interval)
@@ -301,7 +288,6 @@ class QQBotClient:
     # -----------------------------------------------------------------------
 
     async def _on_dispatch(self, payload: Dict[str, Any]) -> None:
-        """处理 OP=0 的事件推送。"""
         t    = payload.get("t", "")
         data = payload.get("d", {})
 
@@ -318,10 +304,8 @@ class QQBotClient:
             log.info("Session 恢复成功，开始补发事件")
             return
 
-        # 只处理私聊和群聊消息
         if t in ("C2C_MESSAGE_CREATE", "GROUP_AT_MESSAGE_CREATE"):
             log.info("收到事件 t=%s", t)
-            # 为 handler 注入事件类型，方便区分
             data["_event_type"] = t
             for handler in self._handlers:
                 asyncio.create_task(self._safe_call(handler, data))
@@ -330,7 +314,6 @@ class QQBotClient:
 
     @staticmethod
     async def _safe_call(handler: MessageHandler, data: Dict[str, Any]) -> None:
-        """安全调用 handler，捕获异常避免单个处理失败影响后续。"""
         try:
             await handler(data)
         except Exception as exc:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Agent Roadmap 本地笔记服务
-用法：python server.py
+notes/server.py — Agent Roadmap 本地笔记服务
+用法：python -m notes.server
 然后用 Chrome/Edge 打开 http://localhost:8765
 """
 
@@ -14,11 +14,12 @@ from urllib.parse import urlparse
 
 # ── 配置 ──────────────────────────────────────────
 PORT      = 8765
-DATA_FILE = "notes.json"   # 与 server.py / html 同级目录
+DATA_FILE = "notes.json"
 HTML_FILE = "agent-engineer-roadmap.html"
 # ──────────────────────────────────────────────────
 
-BASE_DIR = Path(__file__).parent.resolve()
+# 数据文件放在项目根目录，保持与旧版兼容
+BASE_DIR = Path(__file__).parent.parent.resolve()
 DATA_PATH = BASE_DIR / DATA_FILE
 
 
@@ -39,12 +40,11 @@ def save_notes(data: dict):
 
 
 class Handler(SimpleHTTPRequestHandler):
-    # 静态文件从 BASE_DIR 提供
+    # 静态文件从项目根目录提供
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
 
     def log_message(self, fmt, *args):
-        # args[0] 可能是 HTTPStatus 对象，转成字符串再判断
         first = str(args[0]) if args else ""
         if "/api/" in first:
             print(f"  {first}  →  {str(args[1]) if len(args) > 1 else ''}")
@@ -55,7 +55,6 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
 
-        # 忽略 favicon 请求，避免报错
         if parsed.path == '/favicon.ico':
             self._cors(204)
             return
@@ -64,7 +63,6 @@ class Handler(SimpleHTTPRequestHandler):
             data = load_notes()
             self._json(200, data)
         else:
-            # 其余交给 SimpleHTTPRequestHandler 提供静态文件
             super().do_GET()
 
     def do_POST(self):
@@ -104,11 +102,9 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
-    # 检查 html 文件是否存在
     if not (BASE_DIR / HTML_FILE).exists():
-        print(f"⚠️  未找到 {HTML_FILE}，请确保与 server.py 放在同一目录")
+        print(f"⚠️  未找到 {HTML_FILE}，请确保与项目根目录中存在该文件")
 
-    # 如果 notes.json 不存在，创建空文件
     if not DATA_PATH.exists():
         save_notes({})
         print(f"✅ 已创建 {DATA_FILE}")
@@ -127,7 +123,6 @@ def main():
     print("=" * 50)
     print()
 
-    # 尝试自动打开浏览器
     try:
         import webbrowser
         webbrowser.open(url)

@@ -140,7 +140,7 @@ def get_stock_k_data(code, start_date='2023-01-01', end_date='2026-03-14', klt=1
 
     raise ValueError(
         f"抓取 [{code}] K线数据失败，已尝试前缀 {prefixes}，"
-        f"请检查：1)代码是否正确 2)上市日期是否在查询区间内 3)东方财富是否收录该标的\n"
+        f"请检查：1.代码是否正确 2.上市日期是否在查询区间内 3.东方财富是否收录该标的\n"
         f"最后错误: {last_error}"
     )
 

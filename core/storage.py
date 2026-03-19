@@ -21,8 +21,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from config import DATA_DIR
-from models import KnowledgeDoc, SessionState
-from logger import get_logger
+from .models import KnowledgeDoc, SessionState
+from .logger import get_logger
 
 logger = get_logger(__name__)
 

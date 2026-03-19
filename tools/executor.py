@@ -1,7 +1,7 @@
 """
-tools.py — 工具执行器
+tools/executor.py — 工具执行器
   - ToolExecutor：注册模式，便于外部扩展新工具
-  - 内置工具：run_shell / run_python / write_file / web_search
+  - 内置工具：run_shell / run_python / write_file / read_file / web_search
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, Optional
 from tavily import TavilyClient
 
 from config import TAVILY_API_KEY, TOOL_TIMEOUT
-from logger import get_logger
+from core.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -36,7 +36,7 @@ class ToolExecutor:
         self.register("run_shell",  self._handle_run_shell)
         self.register("run_python", self._handle_run_python)
         self.register("write_file", self._handle_write_file)
-        self.register("read_file", self._handle_read_file)
+        self.register("read_file",  self._handle_read_file)
         self.register("web_search", self._handle_web_search)
 
     def register(self, name: str, handler: ToolHandler) -> None:
@@ -153,7 +153,7 @@ class ToolExecutor:
 
     @staticmethod
     def _handle_read_file(args: Dict[str, Any]) -> str:
-        path: str = args.get("path", "").strip()  # ← filename 改为 path
+        path: str = args.get("path", "").strip()
 
         if not path:
             return "[read_file 错误]: 文件路径不能为空。"
